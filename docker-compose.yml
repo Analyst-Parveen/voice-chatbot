@@ -1,0 +1,118 @@
+# =====================================================================
+# Voice AI Assistant — production stack (docker-full mode)
+#
+#   cp .env.docker .env      # then edit: MSSQL_*, public URLs, JWT_SECRET
+#   docker compose up -d --build
+#
+# Services: nginx (edge) → frontend + backend; backend → qdrant + ollama.
+# SQL Server is your EXISTING external database (not containerized here);
+# the backend connects to it via MSSQL_* in .env.
+#
+# GPU:  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# =====================================================================
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    expose:
+      - "6333"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-shot: pull the LLM into Ollama on first boot, then exit.
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+    entrypoint: ["/bin/sh", "-c", "ollama pull \"$${LLM_MODEL}\""]
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - hf_cache:/root/.cache/huggingface   # persist Whisper/bge downloads
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-ws://localhost:8000}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  qdrant_storage:
+  ollama_models:
+  hf_cache:
+  redis_data:
