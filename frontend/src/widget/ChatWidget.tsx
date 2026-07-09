@@ -18,7 +18,6 @@ import { LanguageSelector } from "./LanguageSelector";
 import { MessageList } from "./MessageList";
 import { ModeSelector } from "./ModeSelector";
 import { SuggestedQuestions } from "./SuggestedQuestions";
-import { VoiceAgentLogo } from "./VoiceAgentLogo";
 
 /** Public entry component. Self-contained: brings its own React Query client. */
 export function ChatWidget({ config: partial }: { config?: Partial<WidgetConfig> }) {
@@ -31,6 +30,25 @@ export function ChatWidget({ config: partial }: { config?: Partial<WidgetConfig>
   );
 }
 
+/** Welcome line typed out character-by-character (also spoken on open). */
+function WelcomeIntro({ text }: { text: string }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    setShown(0);
+    const t = setInterval(
+      () => setShown((n) => (n >= text.length ? (clearInterval(t), n) : n + 1)),
+      22,
+    );
+    return () => clearInterval(t);
+  }, [text]);
+  return (
+    <div className="mx-4 rounded-2xl rounded-bl-sm bg-neutral-100 dark:bg-neutral-800 px-3.5 py-3 text-sm leading-relaxed">
+      {text.slice(0, shown)}
+      {shown < text.length && <span className="va-caret" />}
+    </div>
+  );
+}
+
 function WidgetShell({ config }: { config: WidgetConfig }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<WidgetMode>(null);
@@ -38,6 +56,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   const [inputDraft, setInputDraft] = useState("");
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const api = useMemo(
     () => createApi(config.apiBaseUrl, config.token),
@@ -73,6 +92,39 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   }, [config.theme]);
   const base = config.theme === "auto" ? (systemDark ? "dark" : "light") : config.theme;
   const effectiveTheme = override ?? base;
+
+  // ---- Welcome: typed + spoken when the widget opens ----
+  const welcome = useMemo(
+    () =>
+      `Namaste! Welcome to ${config.title}. I'm your AI voice assistant — ` +
+      "ask me anything by typing, speaking, or picking an option below.",
+    [config.title],
+  );
+
+  useEffect(() => {
+    if (!open || mode !== null) return;
+    if (muted || !config.voiceEnabled) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const utterance = new SpeechSynthesisUtterance(welcome);
+    utterance.rate = 1;
+    utterance.lang = "en-IN";
+    // Small delay so the open animation settles first.
+    const t = setTimeout(() => window.speechSynthesis.speak(utterance), 350);
+    return () => {
+      clearTimeout(t);
+      window.speechSynthesis.cancel();
+    };
+  }, [open, mode, muted, config.voiceEnabled, welcome]);
+
+  // ---- Escape key closes the widget ----
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   // ---- Voice: Whisper STT (free, local, Hindi + English) ----
   const startRecording = useCallback(async () => {
@@ -165,24 +217,36 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
             setInputDraft("");
             setOpen(true);
           }}
-          aria-label="Open chat"
+          aria-label="Open chat — click to talk"
           className={cn(
-            "va-logo-launcher fixed bottom-4 sm:bottom-6 z-[9998]",
+            "va-talk-launcher fixed bottom-4 sm:bottom-6 z-[9998]",
             positionClass,
           )}
         >
-          <VoiceAgentLogo />
+          <span className="va-eq" aria-hidden>
+            <span className="va-eq-bar" />
+            <span className="va-eq-bar" />
+            <span className="va-eq-bar" />
+            <span className="va-eq-bar" />
+            <span className="va-eq-bar" />
+            <span className="va-eq-bar" />
+          </span>
+          Click to Talk
         </button>
       )}
 
       {open && (
         <div
           className={cn(
-            "fixed bottom-4 sm:bottom-6 z-[9999] flex flex-col overflow-hidden rounded-2xl shadow-2xl",
+            "fixed z-[9999] flex flex-col overflow-hidden rounded-2xl shadow-2xl",
             "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100",
             "border border-neutral-200 dark:border-neutral-800",
-            "w-[calc(100vw-2rem)] sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[calc(100vh-2rem)]",
-            positionClass,
+            fullscreen
+              ? "inset-2 sm:inset-6 w-auto h-auto"
+              : cn(
+                  "bottom-4 sm:bottom-6 w-[calc(100vw-2rem)] sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[calc(100vh-2rem)]",
+                  positionClass,
+                ),
           )}
         >
           <ChatHeader
@@ -192,6 +256,8 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
             voiceEnabled={mode === "query" && config.voiceEnabled}
             muted={muted}
             effectiveTheme={effectiveTheme}
+            fullscreen={fullscreen}
+            onToggleFullscreen={() => setFullscreen((f) => !f)}
             onToggleMute={() => {
               const next = !muted;
               setMuted(next);
@@ -212,8 +278,8 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
 
           {mode === null && (
             <div className="flex flex-1 flex-col min-h-0">
-              <div className="px-4 pt-4 pb-2 text-center">
-                <p className="text-sm text-neutral-500">👋 Hi! How can I help you today?</p>
+              <div className="pt-4 pb-2">
+                <WelcomeIntro text={welcome} />
               </div>
               <ModeSelector onSelect={selectMode} />
             </div>

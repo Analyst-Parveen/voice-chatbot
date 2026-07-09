@@ -36,7 +36,7 @@ export default function Home() {
       </section>
 
       <ChatWidget
-        config={{ title: "Company Assistant", subtitle: "Ask me anything" }}
+        config={{ title: "Infinity Assurance", subtitle: "Ask me anything" }}
       />
     </main>
   );
