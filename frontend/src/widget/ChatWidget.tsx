@@ -415,7 +415,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                         className="fixed inset-0 z-10"
                         onClick={() => setMenuOpen(false)}
                       />
-                      <div className="absolute right-0 top-full mt-1.5 z-20 flex w-52 flex-col gap-1.5">
+                      <div className="absolute right-0 top-full mt-1.5 z-20 flex w-52 flex-col gap-1.5 rounded-2xl bg-white dark:bg-neutral-900 p-2 shadow-2xl border border-neutral-200 dark:border-neutral-700">
                         <button
                           type="button"
                           onClick={() => {
