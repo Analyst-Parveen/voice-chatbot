@@ -12,6 +12,7 @@ import type {
 } from "../lib/types";
 
 const STORAGE_KEY = "voiceai_session_id";
+const PREV_KEY = "voiceai_prev_session_id";
 
 interface Options {
   /** Called with non-fatal server notes (e.g. "No speech detected"). */
@@ -42,6 +43,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [prevSessionId, setPrevSessionId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const voiceWsRef = useRef<WebSocket | null>(null);
@@ -276,6 +278,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     let stored: string | null = null;
     try {
       stored = localStorage.getItem(STORAGE_KEY);
+      setPrevSessionId(localStorage.getItem(PREV_KEY));
     } catch {
       stored = null;
     }
@@ -451,25 +454,37 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     setIsStreaming(false);
   }, [patch, stopSpeaking]);
 
+  /** Reset local chat state. When `savePrev` the departing session id is
+   *  remembered so `loadPreviousChat` can bring it back. */
+  const resetLocal = useCallback(
+    (savePrev: boolean) => {
+      const departing = sessionRef.current;
+      stopSpeaking();
+      setMessages([]);
+      streamingIdRef.current = null;
+      setIsStreaming(false);
+      sessionRef.current = null;
+      setSessionId(null);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        if (savePrev && departing) {
+          localStorage.setItem(PREV_KEY, departing);
+          setPrevSessionId(departing);
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [stopSpeaking],
+  );
+
   /** Start a fresh conversation locally (new session on next message).
    *  Unlike `clear`, the previous session's history stays on the server. */
-  const newChat = useCallback(() => {
-    stopSpeaking();
-    setMessages([]);
-    streamingIdRef.current = null;
-    setIsStreaming(false);
-    sessionRef.current = null;
-    setSessionId(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-  }, [stopSpeaking]);
+  const newChat = useCallback(() => resetLocal(true), [resetLocal]);
 
   const clear = useCallback(async () => {
     const current = sessionRef.current;
-    newChat();
+    resetLocal(false); // deleted server-side — don't offer it as "previous"
     if (current) {
       try {
         await api.current.clearSession(current);
@@ -477,7 +492,50 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         /* best effort */
       }
     }
-  }, [newChat]);
+  }, [resetLocal]);
+
+  /** Swap back to the remembered previous session (history reloads from the
+   *  server). The current session becomes the new "previous", so the button
+   *  toggles between the two most recent chats. */
+  const loadPreviousChat = useCallback(async (): Promise<boolean> => {
+    const prev = prevSessionId;
+    if (!prev) return false;
+    try {
+      const h = await api.current.getHistory(prev);
+      const current = sessionRef.current;
+      stopSpeaking();
+      streamingIdRef.current = null;
+      setIsStreaming(false);
+      sessionRef.current = prev;
+      setSessionId(prev);
+      try {
+        localStorage.setItem(STORAGE_KEY, prev);
+        if (current) {
+          localStorage.setItem(PREV_KEY, current);
+          setPrevSessionId(current);
+        } else {
+          localStorage.removeItem(PREV_KEY);
+          setPrevSessionId(null);
+        }
+      } catch {
+        /* ignore */
+      }
+      setMessages(
+        (h.messages ?? []).map((m) => ({
+          id: m.id,
+          serverId: m.id,
+          role: m.role,
+          content: m.content,
+          inputType: m.input_type,
+          createdAt: m.created_at,
+        })),
+      );
+      return true;
+    } catch {
+      onInfoRef.current?.("Previous chat is unavailable.");
+      return false;
+    }
+  }, [prevSessionId, stopSpeaking]);
 
   return {
     messages,
@@ -492,5 +550,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     stopSpeaking,
     clear,
     newChat,
+    loadPreviousChat,
+    hasPreviousChat: prevSessionId !== null,
   };
 }

@@ -31,17 +31,65 @@ export function ChatWidget({ config: partial }: { config?: Partial<WidgetConfig>
   );
 }
 
-/** Welcome line typed out character-by-character (also spoken on open). */
-function WelcomeIntro({ text }: { text: string }) {
+/** Guidance bubble: speaks the text and reveals it word-by-word IN SYNC with
+ *  the voice (via utterance word boundaries). When voice is off/unavailable it
+ *  falls back to a typewriter reveal. Text never appears before it is spoken. */
+function GuidanceBubble({ text, voiceOn }: { text: string; voiceOn: boolean }) {
   const [shown, setShown] = useState(0);
+
   useEffect(() => {
     setShown(0);
-    const t = setInterval(
-      () => setShown((n) => (n >= text.length ? (clearInterval(t), n) : n + 1)),
-      22,
-    );
-    return () => clearInterval(t);
-  }, [text]);
+    let typer: ReturnType<typeof setInterval> | null = null;
+    const typeOut = (ms: number) => {
+      if (typer) clearInterval(typer);
+      typer = setInterval(
+        () =>
+          setShown((n) => {
+            if (n >= text.length && typer) clearInterval(typer);
+            return Math.min(n + 1, text.length);
+          }),
+        ms,
+      );
+    };
+
+    const canSpeak =
+      voiceOn && typeof window !== "undefined" && "speechSynthesis" in window;
+    if (!canSpeak) {
+      typeOut(22);
+      return () => {
+        if (typer) clearInterval(typer);
+      };
+    }
+
+    let boundaryFired = false;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.lang = "en-IN";
+    utterance.onboundary = (e) => {
+      boundaryFired = true;
+      // Reveal up to the end of the word being spoken right now.
+      const next = text.indexOf(" ", e.charIndex + 1);
+      setShown(next === -1 ? text.length : next);
+    };
+    utterance.onend = () => setShown(text.length);
+
+    const start = setTimeout(() => {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      // Some browsers never fire word boundaries — fall back to slow typing
+      // roughly matching speech pace so text still follows the voice.
+      setTimeout(() => {
+        if (!boundaryFired) typeOut(55);
+      }, 800);
+    }, 350);
+
+    return () => {
+      clearTimeout(start);
+      if (typer) clearInterval(typer);
+      window.speechSynthesis.cancel();
+    };
+  }, [text, voiceOn]);
+
   return (
     <div className="mx-4 rounded-2xl rounded-bl-sm bg-neutral-100 dark:bg-neutral-800 px-3.5 py-3 text-sm leading-relaxed">
       {text.slice(0, shown)}
@@ -58,6 +106,14 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // After a send, late mic transcripts must not re-fill the input bar.
+  const suppressDraftRef = useRef(false);
+  const applyDraft = useCallback((text: string) => {
+    if (suppressDraftRef.current) return;
+    setInputDraft(text);
+  }, []);
 
   const api = useMemo(
     () => createApi(config.apiBaseUrl, config.token),
@@ -65,7 +121,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   );
   const chat = useChatSocket(config, {
     onInfo: setVoiceNote,
-    onTranscriptDraft: setInputDraft,
+    onTranscriptDraft: applyDraft,
     muted,
   });
   const helpdesk = useHelpdesk(config.apiBaseUrl, config.token);
@@ -75,7 +131,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
 
   const mic = useWhisperMic({
     sttCode: queryLanguage?.sttCode ?? "en",
-    onDraft: setInputDraft,
+    onDraft: applyDraft,
     onStatus: setVoiceNote,
     transcribe: (blob, code) => transcribeRef.current(blob, code),
   });
@@ -94,47 +150,36 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   const base = config.theme === "auto" ? (systemDark ? "dark" : "light") : config.theme;
   const effectiveTheme = override ?? base;
 
-  // ---- Spoken guidance: each screen speaks a short helper sentence ----
+  // ---- Spoken guidance: each screen shows + speaks a helper message.
+  // The GuidanceBubble component speaks it and reveals the text word-by-word
+  // in sync with the voice, so nothing is written before it is spoken.
+  const guidanceVoiceOn = config.voiceEnabled && !muted;
+
   const welcome = useMemo(
     () =>
-      `Namaste! Welcome to ${config.title}. I'm your AI voice assistant — ` +
-      "ask me anything by typing, speaking, or picking an option below.",
+      `Namaste! Welcome to ${config.title}. I'm Ira, your AI voice assistant, ` +
+      "and I'm here to help you round the clock. I can answer your questions " +
+      "about our plans, coverage, claims, and services in seconds. You can " +
+      "talk to me by typing, speaking, or simply picking an option below — " +
+      "so, how may I help you today?",
     [config.title],
   );
 
-  const screenPrompt = useMemo(() => {
-    if (!open) return null;
-    if (mode === null) return welcome;
-    if (mode === "query" && !queryLanguage) {
-      return "Great choice! To ask a query, please select your preferred language from the list below.";
-    }
-    if (mode === "query" && queryLanguage && chat.messages.length === 0) {
-      return (
-        `Thank you! Now please share your concern in ${queryLanguage.label} — ` +
-        "how may I help you today? Type your question, tap the mic and speak, " +
-        "or pick a suggestion. Please ask me something."
-      );
-    }
-    return null;
-  }, [open, mode, queryLanguage, welcome, chat.messages.length]);
+  const languagePrompt =
+    "Great choice! To ask a query, please select your preferred language from " +
+    "the list below. You can chat with me in English or Hindi — and Hinglish " +
+    "works too, just like you type on WhatsApp. Pick whichever feels most " +
+    "comfortable to you.";
 
-  useEffect(() => {
-    if (!screenPrompt) return;
-    if (muted || !config.voiceEnabled) return;
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(screenPrompt);
-    utterance.rate = 1;
-    utterance.lang = "en-IN";
-    // Small delay so the screen transition settles first.
-    const t = setTimeout(() => {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    }, 350);
-    return () => {
-      clearTimeout(t);
-      window.speechSynthesis.cancel();
-    };
-  }, [screenPrompt, muted, config.voiceEnabled]);
+  const concernPrompt = useMemo(() => {
+    if (!queryLanguage) return "";
+    return (
+      `Thank you! Now please share your concern in ${queryLanguage.label} — ` +
+      "how may I help you today? Type your question, tap the mic and speak, " +
+      "or pick a suggested question below. I'll search our knowledge base " +
+      "and give you an accurate answer right away — please ask me something."
+    );
+  }, [queryLanguage]);
 
   // ---- Escape key closes the widget ----
   useEffect(() => {
@@ -149,6 +194,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   // ---- Voice: Whisper STT (free, local, Hindi + English) ----
   const startRecording = useCallback(async () => {
     if (!queryLanguage) return;
+    suppressDraftRef.current = false; // fresh recording: drafts welcome again
     setInputDraft("");
     chat.interrupt();
     await mic.start();
@@ -162,6 +208,8 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      // Block late mic transcripts from re-filling the input after send.
+      suppressDraftRef.current = true;
       if (mic.isRecording) void mic.stop();
       setInputDraft("");
       chat.sendText(
@@ -291,7 +339,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
           {mode === null && (
             <div className="flex flex-1 flex-col min-h-0">
               <div className="pt-4 pb-2">
-                <WelcomeIntro text={welcome} />
+                <GuidanceBubble text={welcome} voiceOn={guidanceVoiceOn} />
               </div>
               <ModeSelector onSelect={selectMode} />
             </div>
@@ -310,11 +358,16 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
           )}
 
           {mode === "query" && !queryLanguage && (
-            <LanguageSelector
-              languages={CHAT_LANGUAGES}
-              onSelect={setQueryLanguage}
-              onBack={backToModes}
-            />
+            <div className="flex flex-1 flex-col min-h-0">
+              <div className="pt-3 pb-1">
+                <GuidanceBubble text={languagePrompt} voiceOn={guidanceVoiceOn} />
+              </div>
+              <LanguageSelector
+                languages={CHAT_LANGUAGES}
+                onSelect={setQueryLanguage}
+                onBack={backToModes}
+              />
+            </div>
           )}
 
           {mode === "query" && queryLanguage && (
@@ -327,53 +380,113 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                 >
                   ← Switch to Helpdesk / Ask a Query
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setQueryLanguage(null)}
-                  className="text-xs text-neutral-500 hover:text-[var(--va-accent)] transition-colors shrink-0"
-                >
-                  {queryLanguage.nativeLabel} · Change
-                </button>
-              </div>
-              {chat.messages.length > 0 && (
-                <div className="px-4 pt-1.5 flex items-center justify-end gap-3">
+
+                {/* Chat options: vertical menu (new / previous / language / delete) */}
+                <div className="relative shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      chat.interrupt();
-                      chat.newChat();
-                      setInputDraft("");
-                    }}
-                    title="Start a new chat (keeps this one in history)"
-                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-[var(--va-accent)] transition-colors"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    aria-label="Chat options"
+                    title="Chat options"
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
+                      "text-white shadow-md transition-transform hover:scale-105 active:scale-95",
+                    )}
+                    style={{ backgroundColor: "var(--va-accent)" }}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 5v14M5 12h14" />
+                    🌐 {queryLanguage.label}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      className={cn("transition-transform", menuOpen && "rotate-180")}
+                    >
+                      <path d="m6 9 6 6 6-6" />
                     </svg>
-                    New chat
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      chat.interrupt();
-                      void chat.clear();
-                      setInputDraft("");
-                    }}
-                    title="Delete this chat permanently"
-                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-red-500 transition-colors"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                    </svg>
-                    Delete
-                  </button>
+
+                  {menuOpen && (
+                    <>
+                      {/* click-away backdrop */}
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setMenuOpen(false)}
+                      />
+                      <div className="absolute right-0 top-full mt-1.5 z-20 w-52 overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-2xl">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            chat.interrupt();
+                            chat.newChat();
+                            setInputDraft("");
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                        >
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                            ＋
+                          </span>
+                          New chat
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!chat.hasPreviousChat}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            chat.interrupt();
+                            void chat.loadPreviousChat();
+                            setInputDraft("");
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/40">
+                            🕘
+                          </span>
+                          Previous chat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            chat.interrupt();
+                            chat.newChat(); // fresh window for the new language
+                            setInputDraft("");
+                            setQueryLanguage(null);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                        >
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                            🌐
+                          </span>
+                          Switch language
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            chat.interrupt();
+                            void chat.clear();
+                            setInputDraft("");
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border-t border-neutral-100 dark:border-neutral-700"
+                        >
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
+                            🗑
+                          </span>
+                          Delete chat
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-              )}
+              </div>
               {chat.messages.length === 0 ? (
                 <div className="flex-1 overflow-y-auto">
-                  <div className="px-4 py-6 text-sm text-neutral-500">
-                    🙏 Please share your concern — how may I help you today? Type,
-                    speak, or pick a suggestion below.
+                  <div className="pt-4 pb-2">
+                    <GuidanceBubble text={concernPrompt} voiceOn={guidanceVoiceOn} />
                   </div>
                   <SuggestedQuestions
                     suggestions={suggestions}
