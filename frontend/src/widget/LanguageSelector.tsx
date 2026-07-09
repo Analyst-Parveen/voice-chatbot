@@ -20,7 +20,9 @@ export function LanguageSelector({ languages, onSelect, onBack }: Props) {
         ← Back
       </button>
       <div className="text-center mb-5">
-        <p className="text-lg font-semibold tracking-tight">Choose your language</p>
+        <p className="text-lg font-semibold tracking-tight">
+          Please select your preferred language
+        </p>
         <p className="mt-1 text-sm text-neutral-500">
           Hindi supports Devanagari and Roman Hinglish (WhatsApp style)
         </p>

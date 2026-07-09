@@ -18,6 +18,7 @@ import { LanguageSelector } from "./LanguageSelector";
 import { MessageList } from "./MessageList";
 import { ModeSelector } from "./ModeSelector";
 import { SuggestedQuestions } from "./SuggestedQuestions";
+import { VoiceAgentLogo } from "./VoiceAgentLogo";
 
 /** Public entry component. Self-contained: brings its own React Query client. */
 export function ChatWidget({ config: partial }: { config?: Partial<WidgetConfig> }) {
@@ -93,7 +94,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   const base = config.theme === "auto" ? (systemDark ? "dark" : "light") : config.theme;
   const effectiveTheme = override ?? base;
 
-  // ---- Welcome: typed + spoken when the widget opens ----
+  // ---- Spoken guidance: each screen speaks a short helper sentence ----
   const welcome = useMemo(
     () =>
       `Namaste! Welcome to ${config.title}. I'm your AI voice assistant — ` +
@@ -101,20 +102,39 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
     [config.title],
   );
 
+  const screenPrompt = useMemo(() => {
+    if (!open) return null;
+    if (mode === null) return welcome;
+    if (mode === "query" && !queryLanguage) {
+      return "Great choice! To ask a query, please select your preferred language from the list below.";
+    }
+    if (mode === "query" && queryLanguage && chat.messages.length === 0) {
+      return (
+        `Thank you! Now please share your concern in ${queryLanguage.label} — ` +
+        "how may I help you today? Type your question, tap the mic and speak, " +
+        "or pick a suggestion. Please ask me something."
+      );
+    }
+    return null;
+  }, [open, mode, queryLanguage, welcome, chat.messages.length]);
+
   useEffect(() => {
-    if (!open || mode !== null) return;
+    if (!screenPrompt) return;
     if (muted || !config.voiceEnabled) return;
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(welcome);
+    const utterance = new SpeechSynthesisUtterance(screenPrompt);
     utterance.rate = 1;
     utterance.lang = "en-IN";
-    // Small delay so the open animation settles first.
-    const t = setTimeout(() => window.speechSynthesis.speak(utterance), 350);
+    // Small delay so the screen transition settles first.
+    const t = setTimeout(() => {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    }, 350);
     return () => {
       clearTimeout(t);
       window.speechSynthesis.cancel();
     };
-  }, [open, mode, muted, config.voiceEnabled, welcome]);
+  }, [screenPrompt, muted, config.voiceEnabled]);
 
   // ---- Escape key closes the widget ----
   useEffect(() => {
@@ -217,21 +237,13 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
             setInputDraft("");
             setOpen(true);
           }}
-          aria-label="Open chat — click to talk"
+          aria-label="Open chat"
           className={cn(
-            "va-talk-launcher fixed bottom-4 sm:bottom-6 z-[9998]",
+            "va-logo-launcher fixed bottom-4 sm:bottom-6 z-[9998]",
             positionClass,
           )}
         >
-          <span className="va-eq" aria-hidden>
-            <span className="va-eq-bar" />
-            <span className="va-eq-bar" />
-            <span className="va-eq-bar" />
-            <span className="va-eq-bar" />
-            <span className="va-eq-bar" />
-            <span className="va-eq-bar" />
-          </span>
-          Click to Talk
+          <VoiceAgentLogo />
         </button>
       )}
 
@@ -360,7 +372,8 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
               {chat.messages.length === 0 ? (
                 <div className="flex-1 overflow-y-auto">
                   <div className="px-4 py-6 text-sm text-neutral-500">
-                    👋 Ask me anything — type, speak, or pick a suggestion below.
+                    🙏 Please share your concern — how may I help you today? Type,
+                    speak, or pick a suggestion below.
                   </div>
                   <SuggestedQuestions
                     suggestions={suggestions}
