@@ -54,3 +54,4 @@ qdrant_local/
 .DS_Store
 Thumbs.db
 *.log
+*.tsbuildinfo
