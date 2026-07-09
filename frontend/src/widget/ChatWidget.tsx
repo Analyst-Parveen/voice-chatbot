@@ -415,7 +415,7 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                         className="fixed inset-0 z-10"
                         onClick={() => setMenuOpen(false)}
                       />
-                      <div className="absolute right-0 top-full mt-1.5 z-20 w-52 overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-2xl">
+                      <div className="absolute right-0 top-full mt-1.5 z-20 flex w-52 flex-col gap-1.5">
                         <button
                           type="button"
                           onClick={() => {
@@ -424,9 +424,9 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                             chat.newChat();
                             setInputDraft("");
                           }}
-                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                          className="flex w-full items-center gap-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform"
                         >
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">
                             ＋
                           </span>
                           New chat
@@ -440,9 +440,9 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                             void chat.loadPreviousChat();
                             setInputDraft("");
                           }}
-                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="flex w-full items-center gap-2.5 rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-sky-700 dark:text-sky-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                         >
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/40">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white">
                             🕘
                           </span>
                           Previous chat
@@ -456,9 +456,9 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                             setInputDraft("");
                             setQueryLanguage(null);
                           }}
-                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                          className="flex w-full items-center gap-2.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-amber-700 dark:text-amber-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform"
                         >
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white">
                             🌐
                           </span>
                           Switch language
@@ -471,9 +471,9 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                             void chat.clear();
                             setInputDraft("");
                           }}
-                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border-t border-neutral-100 dark:border-neutral-700"
+                          className="flex w-full items-center gap-2.5 rounded-xl border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-red-700 dark:text-red-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform"
                         >
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white">
                             🗑
                           </span>
                           Delete chat
