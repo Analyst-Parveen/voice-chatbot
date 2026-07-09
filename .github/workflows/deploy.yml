@@ -23,7 +23,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Until the server exists, the deploy secrets are unset. Skip cleanly
+      # (green check) instead of failing, and auto-activate once they're added.
+      - name: Check deploy config
+        id: check
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          if [ -z "$EC2_HOST" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy skipped — set EC2_HOST/EC2_USER/EC2_SSH_KEY secrets to enable auto-deploy."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy over SSH
+        if: steps.check.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
