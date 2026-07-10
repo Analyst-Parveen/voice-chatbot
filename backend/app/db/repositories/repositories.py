@@ -110,6 +110,19 @@ class UserPreferenceRepository(BaseRepository[UserPreference]):
         )
         return result.scalar_one_or_none()
 
+    async def upsert(self, user_ref: str, **fields: object) -> UserPreference:
+        """Create or update preferences for a user (one row per user_ref)."""
+        existing = await self.get_by_user(user_ref)
+        if existing is not None:
+            for key, value in fields.items():
+                if value is not None and hasattr(existing, key):
+                    setattr(existing, key, value)
+            existing.updated_at = utcnow()
+            await self.session.flush()
+            return existing
+        pref = UserPreference(user_ref=user_ref, **fields)  # type: ignore[arg-type]
+        return await self.add(pref)
+
 
 class AuditLogRepository(BaseRepository[AuditLog]):
     model = AuditLog

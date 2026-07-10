@@ -18,6 +18,7 @@ from app.services.cache import AnswerCache
 from app.services.conversation_manager import ConversationManager
 from app.services.interfaces import LLMService, RAGService, STTService, TTSService
 from app.services.memory_service import MemoryService
+from app.services.telemetry_service import TelemetryService
 from app.services.stubs import (
     StubLLMService,
     StubRAGService,
@@ -113,6 +114,7 @@ def build_conversation_manager(db_session, settings: Settings) -> ConversationMa
         llm=get_llm_service(settings),
         rag=get_rag_service(settings),
         validation=ValidationService(settings),
+        telemetry=TelemetryService(db_session),
         settings=settings,
         cache=AnswerCache(settings),
     )

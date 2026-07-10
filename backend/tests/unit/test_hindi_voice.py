@@ -8,13 +8,13 @@ from app.services.hindi_speech_prep import (
     is_roman_hindi,
     prepare_for_hindi_tts,
 )
-from app.services.validation_service import FALLBACK_MESSAGE, HINDI_FALLBACK_MESSAGE
+from app.services.validation_service import FALLBACK_MESSAGE
 
 
-def test_hindi_prompt_requires_hindi_only() -> None:
+def test_hindi_prompt_generates_english_internally() -> None:
     prompt = build_system_prompt("Hindi")
-    assert "Hindi" in prompt
-    assert HINDI_FALLBACK_MESSAGE in prompt
+    assert "English" in prompt
+    assert FALLBACK_MESSAGE in prompt
 
 
 def test_hinglish_script_hint() -> None:
@@ -36,9 +36,9 @@ def test_english_query_with_hindi_selected() -> None:
 
 
 def test_wrap_user_message_hindi() -> None:
-    wrapped = wrap_user_message("hello", "Hindi")
-    assert "Hindi only" in wrapped
-    assert "hello" in wrapped
+    wrapped = wrap_user_message("aap kya kr rhe ho", "Hindi")
+    assert "English" in wrapped
+    assert "aap kya kr rhe ho" in wrapped
 
 
 def test_english_not_classified_as_hinglish() -> None:

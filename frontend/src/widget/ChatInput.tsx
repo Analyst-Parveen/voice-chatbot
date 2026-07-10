@@ -16,6 +16,10 @@ interface Props {
   streaming?: boolean;
   /** Called when the user presses Stop during a reply. */
   onStopStreaming?: () => void;
+  /** Optional Hindi/localized placeholders when Hindi mode is active. */
+  placeholder?: string;
+  listeningPlaceholder?: string;
+  listeningHint?: string;
   voice: {
     isRecording: boolean;
     level: number;
@@ -34,6 +38,9 @@ export function ChatInput({
   isListening,
   streaming,
   onStopStreaming,
+  placeholder = "Type your message…",
+  listeningPlaceholder = "Your speech appears here…",
+  listeningHint = "Listening… text updates every few seconds",
   voice,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -64,7 +71,7 @@ export function ChatInput({
       {isListening && (
         <div className="mb-1.5 flex items-center gap-2 px-1 text-[11px] text-[var(--va-accent)] animate-pulse">
           <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
-          Listening… text updates every few seconds
+          {listeningHint}
         </div>
       )}
       <div className="flex items-end gap-1.5">
@@ -82,7 +89,7 @@ export function ChatInput({
               submit();
             }
           }}
-          placeholder={isListening ? "Your speech appears here…" : "Type your message…"}
+          placeholder={isListening ? listeningPlaceholder : placeholder}
           className={cn(
             "flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-neutral-400 max-h-[120px]",
             isListening && "ring-1 ring-[var(--va-accent)]/40 rounded-lg",

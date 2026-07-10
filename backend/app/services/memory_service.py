@@ -93,10 +93,10 @@ class MemoryService:
     async def touch(self, session_id: str) -> None:
         await self._sessions.touch(session_id)
 
-    async def clear_session(self, session_id: str) -> bool:
-        """Delete the session and (via cascade) all its messages."""
+    async def clear_session(self, session_id: str) -> Session | None:
+        """Delete the session and (via cascade) all its messages. Returns it if found."""
         existing = await self._sessions.get(session_id)
         if existing is None:
-            return False
+            return None
         await self._sessions.delete(existing)
-        return True
+        return existing

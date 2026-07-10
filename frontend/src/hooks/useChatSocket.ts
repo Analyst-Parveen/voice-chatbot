@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createApi } from "../lib/api";
 import { uid } from "../lib/cn";
+import { getWidgetUserRef } from "../lib/widgetUser";
 import type {
   ChatMessageT,
   InputType,
@@ -52,6 +53,11 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef = useRef(false);
   const api = useRef(createApi(config.apiBaseUrl, config.token));
+  const userRefRef = useRef(getWidgetUserRef(config.userRef));
+
+  useEffect(() => {
+    userRefRef.current = getWidgetUserRef(config.userRef);
+  }, [config.userRef]);
 
   const onInfoRef = useRef(options.onInfo);
   onInfoRef.current = options.onInfo;
@@ -325,7 +331,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         session_id: sessionRef.current,
         message: trimmed,
         input_type: inputType,
-        user_ref: config.userRef,
+        user_ref: userRefRef.current,
         ...(language ? { language } : {}),
       });
 
@@ -370,7 +376,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         setTimeout(() => clearInterval(trySend), 5000);
       }
     },
-    [connect, connectVoice, isStreaming, patch, startAssistantTurn, config.userRef],
+    [connect, connectVoice, isStreaming, patch, startAssistantTurn],
   );
 
   const transcribeAudio = useCallback(
@@ -400,7 +406,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
               JSON.stringify({
                 type: "audio_start",
                 session_id: sessionRef.current,
-                user_ref: config.userRef,
+                user_ref: userRefRef.current,
                 transcribe_only: true,
                 ...(sttCode ? { stt_language: sttCode } : {}),
               }),
@@ -417,7 +423,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
           });
       });
     },
-    [connectVoice, isStreaming, config.userRef],
+    [connectVoice, isStreaming],
   );
 
   const sendAudio = useCallback(
@@ -429,7 +435,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
           JSON.stringify({
             type: "audio_start",
             session_id: sessionRef.current,
-            user_ref: config.userRef,
+            user_ref: userRefRef.current,
             ...(language ? { language } : {}),
           }),
         );
@@ -439,7 +445,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         onInfoRef.current?.("Voice service unavailable.");
       }
     },
-    [connectVoice, isStreaming, config.userRef],
+    [connectVoice, isStreaming],
   );
 
   const interrupt = useCallback(() => {

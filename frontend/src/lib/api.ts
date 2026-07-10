@@ -3,6 +3,13 @@
 
 import type { HelpdeskStep, InputType, Role } from "./types";
 
+export interface PreferencesPayload {
+  user_ref: string;
+  theme?: "light" | "dark";
+  language?: string;
+  voice_enabled?: boolean;
+}
+
 async function asJson(res: Response) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
@@ -55,6 +62,14 @@ export function createApi(baseUrl: string, token?: string) {
         method: "DELETE",
         headers: authHeaders,
       });
+    },
+
+    async savePreferences(payload: PreferencesPayload): Promise<void> {
+      await fetch(`${baseUrl}/api/preferences`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...authHeaders },
+        body: JSON.stringify(payload),
+      }).then(asJson);
     },
 
     async startHelpdesk(): Promise<{ session_id: string; step: HelpdeskStep }> {

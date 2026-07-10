@@ -48,11 +48,16 @@ from app.services.factory import (
     get_stt_service,
     get_tts_for_language,
 )
+from app.services.telemetry_service import TelemetryService
 
 router = APIRouter()
 logger = get_logger("voiceai.ws.voice")
 
 _SENTENCE_END = re.compile(r"(?:[.!?]['\")\]]?|[\u0964\u0965])\s")
+
+
+def _client_ip(websocket: WebSocket) -> str | None:
+    return websocket.client.host if websocket.client else None
 
 
 async def _run_and_speak(
@@ -64,6 +69,7 @@ async def _run_and_speak(
     interrupt: asyncio.Event,
     user_ref: str | None = None,
     language: str | None = None,
+    client_ip: str | None = None,
 ) -> None:
     """Run one turn and emit each sentence's TEXT + AUDIO together.
 
@@ -99,7 +105,7 @@ async def _run_and_speak(
             manager = build_conversation_manager(db, settings)
             async for event in manager.stream(
                 session_id=session_id, message=message, input_type=input_type,
-                user_ref=user_ref, language=language,
+                user_ref=user_ref, language=language, client_ip=client_ip,
             ):
                 if interrupt.is_set():
                     await db.rollback()
@@ -149,7 +155,7 @@ async def _process_audio(
     websocket: WebSocket, audio: bytes, session_id: str | None,
     user_ref: str | None, interrupt: asyncio.Event,
     *, transcribe_only: bool = False, language: str | None = None,
-    stt_language: str | None = None,
+    stt_language: str | None = None, client_ip: str | None = None,
 ) -> None:
     settings = get_settings()
     stt = get_stt_service(settings)
@@ -160,10 +166,19 @@ async def _process_audio(
         return
     await websocket.send_json({"type": "transcript", "text": text})
     if transcribe_only:
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as db:
+            await TelemetryService(db).record_voice_transcript(
+                session_id=session_id,
+                text_length=len(text),
+                stt_language=stt_language,
+                user_ref=user_ref,
+            )
+            await db.commit()
         return
     await _run_and_speak(
         websocket, session_id=session_id, message=text, input_type="voice",
-        interrupt=interrupt, user_ref=user_ref, language=language,
+        interrupt=interrupt, user_ref=user_ref, language=language, client_ip=client_ip,
     )
 
 
@@ -236,6 +251,7 @@ async def voice_ws(websocket: WebSocket) -> None:
                         websocket, audio, session_id, user_ref, interrupt,
                         transcribe_only=only, language=language,
                         stt_language=stt,
+                        client_ip=_client_ip(websocket),
                     ))
                 )
             elif mtype == "message":
@@ -257,6 +273,7 @@ async def voice_ws(websocket: WebSocket) -> None:
                         interrupt=interrupt,
                         user_ref=user_ref,
                         language=language,
+                        client_ip=_client_ip(websocket),
                     ))
                 )
             elif mtype == "interrupt":

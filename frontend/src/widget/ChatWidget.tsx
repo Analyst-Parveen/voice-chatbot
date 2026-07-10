@@ -9,7 +9,9 @@ import { useWhisperMic } from "../hooks/useWhisperMic";
 import { createApi } from "../lib/api";
 import { cn } from "../lib/cn";
 import { CHAT_LANGUAGES } from "../lib/languages";
+import { HINDI_UI } from "../lib/hindiUi";
 import { resolveConfig } from "../lib/config";
+import { getWidgetUserRef } from "../lib/widgetUser";
 import type { ChatLanguage, ChatMessageT, WidgetConfig, WidgetMode } from "../lib/types";
 import { ChatHeader } from "./ChatHeader";
 import { ChatInput } from "./ChatInput";
@@ -34,7 +36,15 @@ export function ChatWidget({ config: partial }: { config?: Partial<WidgetConfig>
 /** Guidance bubble: speaks the text and reveals it word-by-word IN SYNC with
  *  the voice (via utterance word boundaries). When voice is off/unavailable it
  *  falls back to a typewriter reveal. Text never appears before it is spoken. */
-function GuidanceBubble({ text, voiceOn }: { text: string; voiceOn: boolean }) {
+function GuidanceBubble({
+  text,
+  voiceOn,
+  lang = "en-IN",
+}: {
+  text: string;
+  voiceOn: boolean;
+  lang?: string;
+}) {
   const [shown, setShown] = useState(0);
 
   useEffect(() => {
@@ -62,24 +72,36 @@ function GuidanceBubble({ text, voiceOn }: { text: string; voiceOn: boolean }) {
     }
 
     let boundaryFired = false;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.lang = "en-IN";
-    utterance.onboundary = (e) => {
-      boundaryFired = true;
-      // Reveal up to the end of the word being spoken right now.
-      const next = text.indexOf(" ", e.charIndex + 1);
-      setShown(next === -1 ? text.length : next);
-    };
-    utterance.onend = () => setShown(text.length);
-
-    const start = setTimeout(() => {
+    const speak = () => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.lang = lang;
+      const match = window.speechSynthesis
+        .getVoices()
+        .find((v) => v.lang === lang || v.lang.startsWith(lang.split("-")[0]));
+      if (match) utterance.voice = match;
+      utterance.onboundary = (e) => {
+        boundaryFired = true;
+        const next = text.indexOf(" ", e.charIndex + 1);
+        setShown(next === -1 ? text.length : next);
+      };
+      utterance.onend = () => setShown(text.length);
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
-      // Some browsers never fire word boundaries — fall back to slow typing
-      // roughly matching speech pace so text still follows the voice.
+    };
+
+    const start = setTimeout(() => {
+      speak();
+      if (!window.speechSynthesis.getVoices().length) {
+        const onVoices = () => {
+          window.speechSynthesis.removeEventListener("voiceschanged", onVoices);
+          speak();
+        };
+        window.speechSynthesis.addEventListener("voiceschanged", onVoices);
+      }
+      // Some browsers never fire word boundaries — fall back to slow typing.
       setTimeout(() => {
-        if (!boundaryFired) typeOut(55);
+        if (!boundaryFired) typeOut(lang.startsWith("hi") ? 42 : 55);
       }, 800);
     }, 350);
 
@@ -88,7 +110,7 @@ function GuidanceBubble({ text, voiceOn }: { text: string; voiceOn: boolean }) {
       if (typer) clearInterval(typer);
       window.speechSynthesis.cancel();
     };
-  }, [text, voiceOn]);
+  }, [text, voiceOn, lang]);
 
   return (
     <div className="mx-4 rounded-2xl rounded-bl-sm bg-neutral-100 dark:bg-neutral-800 px-3.5 py-3 text-sm leading-relaxed">
@@ -150,6 +172,27 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
   const base = config.theme === "auto" ? (systemDark ? "dark" : "light") : config.theme;
   const effectiveTheme = override ?? base;
 
+  const widgetUserRef = useMemo(
+    () => getWidgetUserRef(config.userRef),
+    [config.userRef],
+  );
+
+  const persistPreferences = useCallback(
+    (patch: {
+      theme?: "light" | "dark";
+      language?: string;
+      voice_enabled?: boolean;
+    }) => {
+      void api.savePreferences({
+        user_ref: widgetUserRef,
+        ...patch,
+      }).catch(() => {
+        /* non-blocking — chat still works if prefs API fails */
+      });
+    },
+    [api, widgetUserRef],
+  );
+
   // ---- Spoken guidance: each screen shows + speaks a helper message.
   // The GuidanceBubble component speaks it and reveals the text word-by-word
   // in sync with the voice, so nothing is written before it is spoken.
@@ -165,21 +208,25 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
     [config.title],
   );
 
-  const languagePrompt =
-    "Great choice! To ask a query, please select your preferred language from " +
-    "the list below. You can chat with me in English or Hindi — and Hinglish " +
-    "works too, just like you type on WhatsApp. Pick whichever feels most " +
-    "comfortable to you.";
+  const isHindi = queryLanguage?.replyLanguage === "Hindi";
+
+  const languagePrompt = isHindi
+    ? HINDI_UI.languagePrompt
+    : "Great choice! To ask a query, please select your preferred language from " +
+      "the list below. You can chat with me in English or Hindi — and Hinglish " +
+      "works too, just like you type on WhatsApp. Pick whichever feels most " +
+      "comfortable to you.";
 
   const concernPrompt = useMemo(() => {
     if (!queryLanguage) return "";
+    if (isHindi) return HINDI_UI.concernPrompt;
     return (
       `Thank you! Now please share your concern in ${queryLanguage.label} — ` +
       "how may I help you today? Type your question, tap the mic and speak, " +
       "or pick a suggested question below. I'll search our knowledge base " +
       "and give you an accurate answer right away — please ask me something."
     );
-  }, [queryLanguage]);
+  }, [queryLanguage, isHindi]);
 
   // ---- Escape key closes the widget ----
   useEffect(() => {
@@ -267,7 +314,9 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
       ? "Helpdesk wizard"
       : mode === "query"
         ? queryLanguage
-          ? `${config.subtitle} · ${queryLanguage.label}`
+          ? isHindi
+            ? `${config.subtitle} · हिंदी`
+            : `${config.subtitle} · ${queryLanguage.label}`
           : "Choose your language"
         : "Helpdesk · or · Ask a Query";
 
@@ -322,10 +371,13 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
               const next = !muted;
               setMuted(next);
               if (next) chat.stopSpeaking();
+              persistPreferences({ voice_enabled: config.voiceEnabled && !next });
             }}
-            onToggleTheme={() =>
-              setOverride(effectiveTheme === "dark" ? "light" : "dark")
-            }
+            onToggleTheme={() => {
+              const next = effectiveTheme === "dark" ? "light" : "dark";
+              setOverride(next);
+              persistPreferences({ theme: next });
+            }}
             onClear={() => {
               if (mode === "query") void chat.clear();
               else helpdesk.reset();
@@ -364,7 +416,14 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
               </div>
               <LanguageSelector
                 languages={CHAT_LANGUAGES}
-                onSelect={setQueryLanguage}
+                onSelect={(lang) => {
+                  setQueryLanguage(lang);
+                  persistPreferences({
+                    language: lang.replyLanguage,
+                    theme: effectiveTheme,
+                    voice_enabled: config.voiceEnabled && !muted,
+                  });
+                }}
                 onBack={backToModes}
               />
             </div>
@@ -486,7 +545,11 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
               {chat.messages.length === 0 ? (
                 <div className="flex-1 overflow-y-auto">
                   <div className="pt-4 pb-2">
-                    <GuidanceBubble text={concernPrompt} voiceOn={guidanceVoiceOn} />
+                    <GuidanceBubble
+                      text={concernPrompt}
+                      voiceOn={guidanceVoiceOn}
+                      lang={isHindi ? "hi-IN" : "en-IN"}
+                    />
                   </div>
                   <SuggestedQuestions
                     suggestions={suggestions}
@@ -517,6 +580,13 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                 streaming={chat.isStreaming || chat.isSpeaking}
                 onStopStreaming={() => chat.interrupt()}
                 voiceEnabled={config.voiceEnabled}
+                placeholder={
+                  isHindi ? HINDI_UI.inputPlaceholder : "Type your message…"
+                }
+                listeningPlaceholder={
+                  isHindi ? HINDI_UI.listeningPlaceholder : "Your speech appears here…"
+                }
+                listeningHint={isHindi ? HINDI_UI.listeningHint : undefined}
                 voice={{
                   isRecording: mic.isRecording,
                   level: mic.level,

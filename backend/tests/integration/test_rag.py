@@ -20,6 +20,7 @@ from app.rag.reranker import NoopReranker
 from app.rag.vector_store import QdrantVectorStore
 from app.services.conversation_manager import ConversationManager
 from app.services.memory_service import MemoryService
+from app.services.telemetry_service import TelemetryService
 from app.services.rag_service import QdrantRAGService
 from app.services.stubs import StubLLMService
 from app.services.validation_service import FALLBACK_MESSAGE, ValidationService
@@ -148,6 +149,7 @@ def _manager(db_session, store: QdrantVectorStore) -> ConversationManager:
             settings=settings,
         ),
         validation=ValidationService(settings),
+        telemetry=TelemetryService(db_session),
         settings=settings,
     )
 

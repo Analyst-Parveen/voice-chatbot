@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from app.services.dto import RetrievedChunk
-from app.services.validation_service import FALLBACK_MESSAGE, hindi_fallback_message
+from app.services.validation_service import FALLBACK_MESSAGE
 
 _DEVANAGARI = re.compile(r"[\u0900-\u097F]")
 _LATIN = re.compile(r"[A-Za-z]")
@@ -47,7 +47,8 @@ def build_system_prompt(
     language: str | None = None,
     script_hint: str | None = None,
 ) -> str:
-    fallback = hindi_fallback_message() if language == "Hindi" else FALLBACK_MESSAGE
+    # Hindi mode: model answers in English; hindi_translator converts for the user.
+    fallback = FALLBACK_MESSAGE
 
     base = (
         "You are a helpful company assistant. Answer the user's question using ONLY "
@@ -61,12 +62,12 @@ def build_system_prompt(
 
     if language == "Hindi":
         rules = (
-            "LANGUAGE RULE (highest priority): The user chose Hindi. Every word of your "
-            "reply MUST be in Hindi — Devanagari or Roman Hinglish. English replies are forbidden. "
+            "LANGUAGE RULE (highest priority): Compose your entire reply in clear, "
+            "simple English only. The user selected Hindi — your English answer will be "
+            "professionally translated to Hindi for them. English replies are required "
+            "even if the user writes in Roman Hindi, Devanagari, or Hinglish. "
             f"{base} "
-            "Use simple, natural Hindi. Stay strictly grounded in CONTEXT. "
-            "For Roman Hinglish: WhatsApp-style spelling (aap, kya, hai, nahi, ke baare mein). "
-            "For Devanagari: correct Hindi grammar."
+            "Stay strictly grounded in CONTEXT."
         )
     elif language == "English":
         rules = (
@@ -88,7 +89,8 @@ def wrap_user_message(message: str, language: str | None) -> str:
     """Reinforce language choice in the user turn (helps small local LLMs)."""
     if language == "Hindi":
         return (
-            "Reply in Hindi only (Devanagari or Roman Hinglish — NOT English).\n\n"
+            "The user chose Hindi and may type in Roman Hindi / Hinglish (WhatsApp style) "
+            "or Devanagari. Answer in English only using CONTEXT.\n\n"
             f"User question: {message}"
         )
     if language == "English":

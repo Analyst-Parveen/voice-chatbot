@@ -30,6 +30,10 @@ router = APIRouter()
 logger = get_logger("voiceai.ws.chat")
 
 
+def _client_ip(websocket: WebSocket) -> str | None:
+    return websocket.client.host if websocket.client else None
+
+
 async def _run_turn(websocket: WebSocket, payload: dict) -> None:
     message = (payload.get("message") or "").strip()
     if not message:
@@ -50,6 +54,7 @@ async def _run_turn(websocket: WebSocket, payload: dict) -> None:
                 input_type=payload.get("input_type", "text"),
                 user_ref=payload.get("user_ref"),
                 language=payload.get("language"),
+                client_ip=_client_ip(websocket),
             ):
                 # Hold back "done" until the turn is durably committed below,
                 # so the client never learns of completion before it's saved
