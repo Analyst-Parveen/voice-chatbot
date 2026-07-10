@@ -47,14 +47,14 @@ Gemini, ElevenLabs, Deepgram, Azure, or AWS AI). The only cost is your server.
 
 Pick a mode with a single env file. Switching modes changes **only `.env`** — never code.
 
-| Mode | Where | Models | Docker |
-|---|---|---|---|
-| `stub` | low-config PC | fake responses | no |
-| `local-light` | low-config PC | tiny (Qwen 0.5B, Whisper tiny) | no |
-| `docker-full` | server | full | yes |
+| Mode | Where | Models |
+|---|---|---|
+| `stub` | low-config PC | fake responses |
+| `local-light` (via `.env.local`) | low-config PC | tiny (Qwen 0.5B, Whisper base) |
+| `local-light` (via `.env.azure`) | server VM | full (Qwen 3B, Whisper small, reranker) |
 
-**Golden path on a weak PC:** `stub` (build & verify everything) → `local-light`
-(sanity-check real models) → `docker-full` (deploy on the server).
+**Golden path on a weak PC:** `stub` (build & verify everything) → tiny models
+(sanity-check real AI) → server VM with `.env.azure` (full models, live).
 
 ---
 
@@ -90,24 +90,17 @@ Open http://localhost:3000 — the skeleton page shows the backend health status
 
 ---
 
-## Quick start (server, Docker)
+## Quick start (server — no Docker)
+
+Deploys natively to one Ubuntu VM (Azure/AWS), managed by systemd:
 
 ```bash
-cp .env.docker .env      # then edit .env: set MSSQL_* and public URLs
-docker compose up --build
+cp .env.azure .env                    # then edit: public URLs, JWT, DB creds
+bash deploy/azure/backend-setup.sh    # Python, Ollama+model, Redis, service
+bash deploy/azure/frontend-setup.sh   # Node, build, service, nginx
 ```
 
-- Backend → http://localhost:8000
-- Frontend → http://localhost:3000
-
-For a GPU server:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
-```
-
-> In Phase 1 the compose stack runs only `backend` + `frontend`.
-> `qdrant` and `ollama` services are added in Phase 8.
+Full runbook: [`deploy/azure/README.md`](deploy/azure/README.md)
 
 ---
 
@@ -117,7 +110,6 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
 make mode-stub      # copy .env.stub -> .env
 make backend-dev    # run FastAPI (autoreload)
 make frontend-dev   # run Next.js
-make up             # docker compose up
 ```
 
 ---
