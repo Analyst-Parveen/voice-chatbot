@@ -1,0 +1,19 @@
+[Unit]
+Description=Voice AI Assistant backend (FastAPI, native — no Docker)
+After=network-online.target ollama.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APP_DIR__/backend
+# ONE process, ONE worker, NO --reload: embedded Qdrant holds an exclusive
+# file lock, so exactly one backend process may run.
+ExecStart=__APP_DIR__/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+# Model warm-up on boot can take a while on CPU.
+TimeoutStartSec=600
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
