@@ -1,0 +1,5 @@
+# Server-side files must always be LF — CRLF breaks bash/systemd on Linux.
+*.sh        text eol=lf
+*.service   text eol=lf
+deploy/**   text eol=lf
+Makefile    text eol=lf
