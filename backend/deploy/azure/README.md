@@ -37,18 +37,15 @@ git clone https://<TOKEN>@github.com/infinitymasters2023/voice-ai-assistant.git 
 cd /opt/voice-agent
 
 # config
-cp .env.azure .env
-nano .env      # set: CORS_ORIGINS, NEXT_PUBLIC_* URLs, JWT_SECRET, (DB creds)
+cp backend/.env.azure backend/.env
+nano backend/.env      # CORS_ORIGINS, JWT_SECRET, DB creds
+nano frontend/.env.production   # NEXT_PUBLIC_* URLs
 
 # company documents
 #   copy your docs into /opt/voice-agent/data/   (scp / rsync)
 
-# BACKEND  (installs Python, Ollama + model, Redis, Piper, migrations,
-#           runs ingestion, starts the service)
-bash deploy/azure/backend-setup.sh
-
-# FRONTEND (installs Node, builds, starts the service, configures nginx)
-bash deploy/azure/frontend-setup.sh
+bash backend/deploy/azure/backend-setup.sh
+bash backend/deploy/azure/frontend-setup.sh
 ```
 
 Open `http://<VM_IP>` — the widget is live.
@@ -57,9 +54,9 @@ Open `http://<VM_IP>` — the widget is live.
 
 ```bash
 cd /opt/voice-agent
-bash deploy/azure/deploy-backend.sh            # backend only
-bash deploy/azure/deploy-frontend.sh           # frontend only
-bash deploy/azure/deploy-backend.sh --ingest   # backend + re-ingest docs
+bash backend/deploy/azure/deploy-backend.sh            # backend only
+bash backend/deploy/azure/deploy-frontend.sh           # frontend only
+bash backend/deploy/azure/deploy-backend.sh --ingest   # backend + re-ingest docs
 ```
 
 ## 4. Operations
@@ -79,8 +76,8 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx
 ```
 
-Update `.env`'s `NEXT_PUBLIC_*` to `https://` / `wss://` and re-run
-`deploy-frontend.sh` (the URLs are baked in at build time).
+Update `frontend/.env.production` `NEXT_PUBLIC_*` to `https://` / `wss://` and re-run
+`backend/deploy/azure/deploy-frontend.sh` (URLs are baked in at build time).
 
 ---
 
@@ -97,4 +94,4 @@ Update `.env`'s `NEXT_PUBLIC_*` to `https://` / `wss://` and re-run
 
 To use the company MSSQL instead of SQLite: install the Microsoft ODBC driver
 (`msodbcsql17`), run `./venv/bin/pip install -e ".[mssql]"`, flip the
-`DB_BACKEND=mssql` block in `.env`, then `deploy-backend.sh`.
+`DB_BACKEND=mssql` block in `backend/.env`, then `deploy-backend.sh`.

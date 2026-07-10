@@ -18,10 +18,9 @@ from typing import Annotated
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-# Repo root is three levels up from this file (core -> app -> backend -> root).
-# We load the shared root `.env` no matter what directory the process starts
-# in (backend/, repo root, or Docker), and let a local backend/.env override.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# Backend package root (core -> app -> backend).
+# Load backend/.env whether uvicorn starts from backend/ or repo root.
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 class RunMode(str, Enum):
@@ -43,8 +42,7 @@ class Settings(BaseSettings):
     """Typed application settings, populated from the environment."""
 
     model_config = SettingsConfigDict(
-        # Later files win, so backend/.env (cwd) overrides the shared root .env.
-        env_file=(str(_REPO_ROOT / ".env"), ".env"),
+        env_file=(str(_BACKEND_ROOT / ".env"), ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

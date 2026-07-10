@@ -1,49 +1,59 @@
-# Core Dependencies
+# Voice AI Assistant — Python dependencies (single file, all environments)
+# Python 3.11+  |  pip install -r requirements.txt
+#
+# Works on: local dev PC, Azure VM server, SQLite or MSSQL, voice + RAG + ingest.
+# Matches: pip install -e ".[dev,voice,embeddings,ingest,cache,mssql]"
+#
+# System prereqs (not pip):
+#   - Ollama + LLM  →  ollama pull qwen2.5:0.5b  (local) or qwen2.5:3b (server)
+#   - ffmpeg        →  voice pipeline
+#   - ODBC Driver 17 for SQL Server  →  only when DB_BACKEND=mssql (Linux: msodbcsql17)
+#
+# Frontend (separate):  cd frontend && npm ci
+
+# ---- App framework ----
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
 python-dotenv>=1.0
+httpx>=0.27
 
-# Database (Phase 3)
+# ---- Database ----
 sqlalchemy>=2.0
 alembic>=1.13
 aiosqlite>=0.20
 greenlet>=3.0
+aioodbc>=0.5
+pyodbc>=5.1
 
-# RAG (Phase 6)
+# ---- RAG / vector store ----
 qdrant-client>=1.11
 numpy>=1.26
+sentence-transformers>=3.0
 
-# LLM client (Phase 7)
-httpx>=0.27
+# ---- Cache / Redis ----
+redis>=5.0
 
-# Monitoring (Phase 9)
+# ---- Document ingestion ----
+pypdf>=4.2
+python-docx>=1.1
+beautifulsoup4>=4.12
+requests>=2.31
+pyyaml>=6.0
+trafilatura>=1.12
+
+# ---- Voice (STT + TTS) ----
+faster-whisper>=1.0
+piper-tts>=1.2
+indic-transliteration>=2.3
+
+# ---- Monitoring ----
 prometheus-client>=0.20
 
-# ---- Optional Dependencies (Uncomment if needed) ----
-
-# [dev]
-# pytest>=8.0
-# pytest-asyncio>=0.23
-# pytest-timeout>=2.3
-# ruff>=0.5
-# mypy>=1.10
-
-# [mssql]
-# aioodbc>=0.5
-# pyodbc>=5.1
-
-# [embeddings]
-# sentence-transformers>=3.0
-
-# [ingest]
-# pypdf>=4.2
-# python-docx>=1.1
-# beautifulsoup4>=4.12
-# requests>=2.31
-# pyyaml>=6.0
-
-# [voice]
-# faster-whisper>=1.0
-# piper-tts>=1.2
+# ---- Dev / tests ----
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-timeout>=2.3
+ruff>=0.5
+mypy>=1.10

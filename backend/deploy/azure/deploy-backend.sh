@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Update-deploy the BACKEND only (no Docker). Run on the VM after a git push:
-#   cd /opt/voice-agent && bash deploy/azure/deploy-backend.sh [--ingest]
+#   cd /opt/voice-agent && bash backend/deploy/azure/deploy-backend.sh [--ingest]
 #
 # --ingest also re-runs knowledge ingestion (needed when data/ docs changed).
 # Ingestion requires the backend stopped (embedded Qdrant holds a file lock).

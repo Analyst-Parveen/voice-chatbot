@@ -1,0 +1,6 @@
+# Voice AI Assistant — install from repo root
+#   pip install -r requirements.txt
+#
+# Frontend:  cd frontend && npm ci
+
+-r backend/requirements.txt

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 
-_MODELS_DIR = Path(__file__).resolve().parents[1].parent / "models"
+_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 _PIPER_DIR = _MODELS_DIR / "piper"
 _PIPER_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 

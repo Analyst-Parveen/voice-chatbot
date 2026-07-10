@@ -4,29 +4,15 @@
 
 A standalone, enterprise-grade **Voice + Text AI Assistant** that answers strictly
 from your company's own knowledge (RAG), stores conversations in your existing
-**Microsoft SQL Server**, and later embeds into your website as a floating widget.
+**Microsoft SQL Server**, and embeds into your website as a floating widget.
 
-Everything runs locally / self-hosted — **no paid APIs** (no OpenAI, Claude,
-Gemini, ElevenLabs, Deepgram, Azure, or AWS AI). The only cost is your server.
+Everything runs locally / self-hosted — **no paid APIs**. The only cost is your server.
 
-> Build progress: **All 10 phases complete** ✅ — scaffold, config, database,
-> backend core, frontend widget, RAG, Voice, Deployment, Testing & Monitoring,
-> and Website Integration (embeddable `widget.js` with a one-snippet embed).
-> See [`BUILD_VOICE_AGENT.md`](BUILD_VOICE_AGENT.md) for the full plan,
-> [`ARCHITECTURE.md`](ARCHITECTURE.md) for the design, and
-> [`deploy/README.md`](deploy/README.md) for deployment + website embedding.
+> See [`docs/BUILD_VOICE_AGENT.md`](docs/BUILD_VOICE_AGENT.md) for the full plan,
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design, and
+> [`backend/deploy/README.md`](backend/deploy/README.md) for deployment.
 
 ---
-
-
-
-
-
-
-
-
-
-
 
 ## Tech stack
 
@@ -37,79 +23,73 @@ Gemini, ElevenLabs, Deepgram, Azure, or AWS AI). The only cost is your server.
 | LLM | Qwen2.5-Instruct via Ollama |
 | STT / TTS | faster-whisper / Piper |
 | Embeddings / Rerank | BAAI bge-m3 / bge-reranker-v2-m3 |
-| Vector DB | Qdrant |
-| Database | Microsoft SQL Server (existing) via SQLAlchemy + Alembic |
-| Deploy | Docker Compose |
+| Vector DB | Qdrant (embedded) |
+| Database | Microsoft SQL Server or SQLite |
+| Deploy | Native Ubuntu VM + systemd + nginx |
 
 ---
 
 ## Run modes
 
-Pick a mode with a single env file. Switching modes changes **only `.env`** — never code.
+Backend mode is selected via `backend/.env` (never commit the runtime `.env` file).
 
-| Mode | Where | Models |
+| Mode | Template | Where |
 |---|---|---|
-| `stub` | low-config PC | fake responses |
-| `local-light` (via `.env.local`) | low-config PC | tiny (Qwen 0.5B, Whisper base) |
-| `local-light` (via `.env.azure`) | server VM | full (Qwen 3B, Whisper small, reranker) |
+| `stub` | `backend/.env.stub` | low-config PC, no AI |
+| `local-light` | `backend/.env.local` | dev PC, tiny models |
+| production | `backend/.env.azure` | Azure VM, full models |
 
-**Golden path on a weak PC:** `stub` (build & verify everything) → tiny models
-(sanity-check real AI) → server VM with `.env.azure` (full models, live).
+Frontend URLs live in `frontend/.env.local` (dev) or `frontend/.env.production` (build).
 
 ---
 
-## Quick start (local, no Docker)
+## Quick start (local)
 
 Requires **Python 3.11+** and **Node 18+**.
 
-### 1. Backend (terminal 1)
+### 1. Backend
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows PowerShell:  .venv\Scripts\Activate.ps1
-# Git Bash / macOS / Linux:  source .venv/bin/activate
-pip install -e ".[dev]"
-
-cp ../.env.stub ../.env          # start in stub mode (no AI, no SQL Server)
+# Windows:  .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cp .env.stub .env          # or .env.local for real AI
 uvicorn app.main:app --reload --port 8000
 ```
 
-Check it: open http://localhost:8000/api/health → `{"status":"ok",...}`
-API docs: http://localhost:8000/docs
-
-### 2. Frontend (terminal 2)
+### 2. Frontend
 
 ```bash
 cd frontend
 npm install
+# frontend/.env.local is pre-filled for localhost
 npm run dev
 ```
 
-Open http://localhost:3000 — the skeleton page shows the backend health status.
+Open http://localhost:3000
 
 ---
 
-## Quick start (server — no Docker)
-
-Deploys natively to one Ubuntu VM (Azure/AWS), managed by systemd:
+## Quick start (server)
 
 ```bash
-cp .env.azure .env                    # then edit: public URLs, JWT, DB creds
-bash deploy/azure/backend-setup.sh    # Python, Ollama+model, Redis, service
-bash deploy/azure/frontend-setup.sh   # Node, build, service, nginx
+cp backend/.env.azure backend/.env && nano backend/.env
+nano frontend/.env.production
+bash backend/deploy/azure/backend-setup.sh
+bash backend/deploy/azure/frontend-setup.sh
 ```
 
-Full runbook: [`deploy/azure/README.md`](deploy/azure/README.md)
+Full runbook: [`backend/deploy/azure/README.md`](backend/deploy/azure/README.md)
 
 ---
 
 ## Handy commands
 
 ```bash
-make mode-stub      # copy .env.stub -> .env
-make backend-dev    # run FastAPI (autoreload)
-make frontend-dev   # run Next.js
+make mode-stub       # backend/.env.stub -> backend/.env
+make backend-dev
+make frontend-dev
 ```
 
 ---
@@ -117,15 +97,28 @@ make frontend-dev   # run Next.js
 ## Project layout
 
 ```
-voice-agent/
-├── backend/     FastAPI app, services, RAG, ingestion, DB (SQLAlchemy)
-├── frontend/    Next.js app + embeddable chat widget
-├── deploy/      nginx + deployment / website-embed guide
-├── models/      downloaded model files (gitignored)
-└── data/        source docs to ingest (gitignored)
+voice-ai-assistant/
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   ├── .env.local              # Local dev URLs
+│   ├── .env.production         # Production URLs (build)
+│   └── .env.example
+├── backend/
+│   ├── app/
+│   ├── deploy/
+│   ├── requirements.txt
+│   ├── .env                    # Runtime (gitignored)
+│   ├── .env.local              # Local dev template
+│   ├── .env.azure              # Server template
+│   └── .env.example
+├── docs/
+├── scripts/
+├── data/                       # Company docs to ingest (gitignored)
+├── models/                     # Downloaded AI models (gitignored)
+└── README.md
 ```
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full breakdown.
 
 ---
 
