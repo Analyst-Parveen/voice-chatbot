@@ -21,6 +21,10 @@ class ChatRequest(BaseModel):
     )
     message: str = Field(min_length=1, max_length=4000)
     input_type: InputType = InputType.TEXT
+    language: str | None = Field(
+        default=None,
+        description="Reply language label (e.g. English, Hindi).",
+    )
 
 
 class ChatResponse(BaseModel):

@@ -114,8 +114,8 @@ async def _run_and_speak(
 
                 etype = event.get("type")
                 if etype == "token":
+                    await websocket.send_json(event)
                     if tts is None:
-                        await websocket.send_json(event)
                         continue
                     sentence_buf = getattr(_run_and_speak, "_buf", "")
                     sentence_buf += event["token"]

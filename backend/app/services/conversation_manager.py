@@ -34,6 +34,7 @@ from app.services.hindi_translator import (
 from app.services.interfaces import LLMService, RAGService
 from app.services.memory_service import MemoryService
 from app.services.telemetry_service import TelemetryService
+from app.services.starter_faqs import lookup_starter_answer
 from app.services.validation_service import FALLBACK_MESSAGE, hindi_fallback_message, ValidationService
 
 SYSTEM_PROMPT = build_system_prompt()  # default; per-turn language overrides in _prepare
@@ -86,6 +87,7 @@ class ConversationManager:
         user_ref: str | None,
         language: str | None = None,
         client_ip: str | None = None,
+        skip_rag: bool = False,
     ) -> _PreparedTurn:
         started = time.perf_counter()
         channel = Channel.VOICE.value if input_type == InputType.VOICE.value else Channel.TEXT.value
@@ -96,7 +98,7 @@ class ConversationManager:
         await self._memory.add_user_message(session.id, message, input_type)
 
         history = await self._memory.recent_context(session.id, limit=10)
-        chunks = await self._rag.retrieve(message)
+        chunks = [] if skip_rag else await self._rag.retrieve(message)
         context = self._rag.build_context(chunks)
 
         request = LLMRequest(
@@ -187,11 +189,15 @@ class ConversationManager:
         client_ip: str | None = None,
     ) -> TurnResult:
         """Run a full turn and return the result (non-streaming)."""
+        canned = lookup_starter_answer(message, language)
         prepared = await self._prepare(
             session_id=session_id, message=message,
             input_type=input_type, user_ref=user_ref, language=language,
-            client_ip=client_ip,
+            client_ip=client_ip, skip_rag=canned is not None,
         )
+        if canned is not None:
+            return await self._finalize(prepared, canned, used_fallback=False)
+
         fallback = hindi_fallback_message(devanagari=True) if is_hindi_mode(language) else FALLBACK_MESSAGE
         if not self._validation.should_answer(prepared.chunks):
             return await self._finalize(prepared, fallback, used_fallback=True)
@@ -230,13 +236,29 @@ class ConversationManager:
         ``{"type": "token", "token"}`` (repeated) →
         ``{"type": "done", "message_id", "latency_ms", "sources"}``.
         """
+        canned = lookup_starter_answer(message, language)
         prepared = await self._prepare(
             session_id=session_id, message=message,
             input_type=input_type, user_ref=user_ref, language=language,
-            client_ip=client_ip,
+            client_ip=client_ip, skip_rag=canned is not None,
         )
         fallback = hindi_fallback_message(devanagari=True) if is_hindi_mode(language) else FALLBACK_MESSAGE
         yield {"type": "session", "session_id": prepared.session_id}
+
+        if canned is not None:
+            for m in _REPLAY_TOKEN.finditer(canned):
+                yield {"type": "token", "token": m.group(0)}
+            result = await self._finalize(prepared, canned, used_fallback=False)
+            yield {
+                "type": "done",
+                "message_id": result.message_id,
+                "latency_ms": result.latency_ms,
+                "sources": [
+                    {"chunk_id": c.chunk_id, "source": c.source, "score": c.score}
+                    for c in result.sources
+                ],
+            }
+            return
 
         # Grounding gate BEFORE streaming, so what we stream equals what we store.
         if not self._validation.should_answer(prepared.chunks):
@@ -255,8 +277,11 @@ class ConversationManager:
                 result = await self._finalize(prepared, cached, used_fallback=False)
             else:
                 buffer: list[str] = []
+                stream_live = not is_hindi_mode(language)
                 async for token in self._llm.stream(prepared.request):
                     buffer.append(token)
+                    if stream_live:
+                        yield {"type": "token", "token": token}
                 english = "".join(buffer)
                 english = self._validation.finalize_answer(english, prepared.chunks)
                 used_fallback = english.strip() == FALLBACK_MESSAGE
@@ -268,8 +293,9 @@ class ConversationManager:
                 )
                 if self._cache:
                     await self._cache.set(message, chunk_ids, language, answer)
-                for m in _REPLAY_TOKEN.finditer(answer):
-                    yield {"type": "token", "token": m.group(0)}
+                if not stream_live:
+                    for m in _REPLAY_TOKEN.finditer(answer):
+                        yield {"type": "token", "token": m.group(0)}
                 result = await self._finalize(prepared, answer, used_fallback=used_fallback)
 
         yield {

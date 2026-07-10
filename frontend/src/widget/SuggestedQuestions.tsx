@@ -4,14 +4,16 @@
 export function SuggestedQuestions({
   suggestions,
   onSelect,
+  sectionLabel = "Suggested questions",
 }: {
   suggestions: string[];
   onSelect: (q: string) => void;
+  sectionLabel?: string;
 }) {
   if (suggestions.length === 0) return null;
   return (
     <div className="px-4 pb-3">
-      <p className="text-xs text-neutral-500 mb-2">Suggested questions</p>
+      <p className="text-xs text-neutral-500 mb-2">{sectionLabel}</p>
       <div className="flex flex-wrap gap-2">
         {suggestions.map((q) => (
           <button

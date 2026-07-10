@@ -30,8 +30,11 @@ export function createApi(baseUrl: string, token?: string) {
     : {};
 
   return {
-    async getSuggestions(): Promise<string[]> {
-      const data = await fetch(`${baseUrl}/api/suggestions`, {
+    async getSuggestions(language?: string): Promise<string[]> {
+      const params = language
+        ? `?language=${encodeURIComponent(language)}`
+        : "";
+      const data = await fetch(`${baseUrl}/api/suggestions${params}`, {
         headers: authHeaders,
       }).then(asJson);
       return data.suggestions ?? [];

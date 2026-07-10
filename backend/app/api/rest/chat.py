@@ -22,6 +22,7 @@ async def chat(
         message=payload.message,
         input_type=payload.input_type.value,
         user_ref=auth.user_ref,
+        language=payload.language,
     )
     return ChatResponse(
         session_id=result.session_id,

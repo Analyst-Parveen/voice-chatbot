@@ -73,6 +73,8 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
   const speakingRef = useRef(false);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const pendingDoneRef = useRef<ServerEvent | null>(null);
+  // Voice path streams answer text via token events; say only carries audio.
+  const voiceTextStreamedRef = useRef(false);
 
   const patch = useCallback((id: string, upd: Partial<ChatMessageT>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...upd } : m)));
@@ -93,6 +95,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         patch(id, { streaming: false, serverId: evt.message_id, sources: evt.sources });
       }
       streamingIdRef.current = null;
+      voiceTextStreamedRef.current = false;
       setIsStreaming(false);
     },
     [patch],
@@ -103,6 +106,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
       const now = new Date().toISOString();
       const assistantId = uid();
       streamingIdRef.current = assistantId;
+      voiceTextStreamedRef.current = false;
       setMessages((prev) => [
         ...prev,
         { id: uid(), role: "user", content: userContent, inputType, createdAt: now },
@@ -131,7 +135,9 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
       }
       return;
     }
-    appendToStreaming(item.text);
+    if (!voiceTextStreamedRef.current) {
+      appendToStreaming(item.text);
+    }
 
     if (item.audio && !mutedRef.current) {
       const audio = new Audio(`data:${item.mime};base64,${item.audio}`);
@@ -155,7 +161,9 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
 
   const stopSpeaking = useCallback(() => {
     // Reveal any not-yet-shown text so the message stays complete.
-    for (const item of sayQueueRef.current) appendToStreaming(item.text);
+    if (!voiceTextStreamedRef.current) {
+      for (const item of sayQueueRef.current) appendToStreaming(item.text);
+    }
     sayQueueRef.current = [];
     if (audioElRef.current) {
       audioElRef.current.pause();
@@ -192,7 +200,8 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
           }
           startAssistantTurn(evt.text, "voice");
           break;
-        case "token": // plain text-only path
+        case "token": // text streaming (voice + text sockets)
+          voiceTextStreamedRef.current = true;
           if (streamingId) appendToStreaming(evt.token);
           break;
         case "say": // spoken path: queue sentence, play when ready

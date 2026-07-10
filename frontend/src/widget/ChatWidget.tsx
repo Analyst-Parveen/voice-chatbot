@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useChatSocket } from "../hooks/useChatSocket";
@@ -10,6 +10,7 @@ import { createApi } from "../lib/api";
 import { cn } from "../lib/cn";
 import { CHAT_LANGUAGES } from "../lib/languages";
 import { HINDI_UI } from "../lib/hindiUi";
+import { starterQuestionsForLanguage } from "../lib/starterQuestions";
 import { resolveConfig } from "../lib/config";
 import { getWidgetUserRef } from "../lib/widgetUser";
 import type { ChatLanguage, ChatMessageT, WidgetConfig, WidgetMode } from "../lib/types";
@@ -291,13 +292,11 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
     setInputDraft("");
   }, [helpdesk]);
 
-  // ---- Suggestions ----
-  const { data: suggestions = [] } = useQuery({
-    queryKey: ["suggestions", config.apiBaseUrl],
-    queryFn: api.getSuggestions,
-    staleTime: 5 * 60 * 1000,
-    enabled: mode === "query",
-  });
+  // ---- Suggestions (localized client-side; answers are canned on the backend) ----
+  const suggestions = useMemo(
+    () => starterQuestionsForLanguage(queryLanguage?.replyLanguage),
+    [queryLanguage?.replyLanguage],
+  );
 
   const onFeedback = useCallback(
     (m: ChatMessageT, rating: "up" | "down") => {
@@ -554,6 +553,9 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                   <SuggestedQuestions
                     suggestions={suggestions}
                     onSelect={(q) => handleSend(q)}
+                    sectionLabel={
+                      isHindi ? HINDI_UI.suggestedQuestions : "Suggested questions"
+                    }
                   />
                 </div>
               ) : (

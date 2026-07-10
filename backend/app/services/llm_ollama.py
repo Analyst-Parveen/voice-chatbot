@@ -23,6 +23,12 @@ class OllamaLLMService:
     def __init__(self, settings: Settings) -> None:
         self._url = settings.ollama_url.rstrip("/")
         self._model = settings.llm_model
+        self._timeout = httpx.Timeout(
+            connect=10.0,
+            read=settings.ollama_timeout_seconds,
+            write=30.0,
+            pool=10.0,
+        )
 
     def _messages(self, request: LLMRequest) -> list[dict[str, str]]:
         messages: list[dict[str, str]] = [{"role": "system", "content": request.system}]
@@ -43,7 +49,7 @@ class OllamaLLMService:
             "stream": True,
             "options": {"temperature": 0.2},
         }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
             async with client.stream("POST", f"{self._url}/api/chat", json=payload) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():

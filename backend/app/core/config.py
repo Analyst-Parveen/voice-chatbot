@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     # ---- Ollama (LLM) ----
     ollama_url: str = Field(default="http://localhost:11434", alias="OLLAMA_URL")
     llm_model: str = Field(default="qwen2.5:0.5b", alias="LLM_MODEL")
+    # Max seconds to wait for Ollama (slow CPUs may need several minutes per turn).
+    ollama_timeout_seconds: float = Field(default=600.0, alias="OLLAMA_TIMEOUT_SECONDS")
 
     # ---- Qdrant (vector DB) ----
     qdrant_url: str = Field(default="", alias="QDRANT_URL")

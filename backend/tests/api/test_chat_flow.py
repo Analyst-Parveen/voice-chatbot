@@ -82,6 +82,37 @@ def test_suggestions() -> None:
     assert len(resp.json()["suggestions"]) > 0
 
 
+def test_suggestions_hindi() -> None:
+    resp = client.get("/api/suggestions", params={"language": "Hindi"})
+    assert resp.status_code == 200
+    questions = resp.json()["suggestions"]
+    assert len(questions) == 4
+    assert any("\u0900" <= ch <= "\u097f" for q in questions for ch in q)
+
+
+def test_starter_faq_skips_llm() -> None:
+    resp = client.post(
+        "/api/chat",
+        json={"message": "What is your return policy?"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "30 days" in body["answer"]
+    assert "stub" not in body["answer"].lower()
+
+
+def test_starter_faq_hindi() -> None:
+    resp = client.post(
+        "/api/chat",
+        json={
+            "message": "आपकी रिटर्न पॉलिसी क्या है?",
+            "language": "Hindi",
+        },
+    )
+    assert resp.status_code == 200
+    assert "30 दिन" in resp.json()["answer"]
+
+
 def test_empty_message_rejected() -> None:
     resp = client.post("/api/chat", json={"message": ""})
     assert resp.status_code == 422  # pydantic min_length

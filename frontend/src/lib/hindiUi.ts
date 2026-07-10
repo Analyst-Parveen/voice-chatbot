@@ -13,4 +13,5 @@ export const HINDI_UI = {
   listeningPlaceholder: "आपकी आवाज़ यहाँ दिखेगी…",
   chooseLanguage: "अपनी भाषा चुनें",
   listeningHint: "सुन रही हूँ… कुछ सेकंड में टेक्स्ट दिखेगा",
+  suggestedQuestions: "सुझाए गए सवाल",
 } as const;
