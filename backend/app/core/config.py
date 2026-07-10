@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     sqlite_path: str = Field(default="./voiceai_dev.sqlite3", alias="SQLITE_PATH")
     mssql_host: str = Field(default="localhost", alias="MSSQL_HOST")
     mssql_port: int = Field(default=1433, alias="MSSQL_PORT")
-    mssql_db: str = Field(default="CompanyDB", alias="MSSQL_DB")
+    mssql_db: str = Field(default="IAPL", alias="MSSQL_DB")
     mssql_user: str = Field(default="sa", alias="MSSQL_USER")
     mssql_password: str = Field(default="", alias="MSSQL_PASSWORD")
     mssql_driver: str = Field(default="ODBC Driver 17 for SQL Server", alias="MSSQL_DRIVER")
