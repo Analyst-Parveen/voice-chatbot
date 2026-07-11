@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.rest import chat, feedback, health, helpdesk, history, metrics, preferences, session, suggestions
+from app.api.rest import admin_faq, chat, feedback, health, helpdesk, history, metrics, preferences, session, suggestions
 from app.api.ws import chat_ws, voice_ws
 from app.core.config import Settings, get_settings
 from app.core.exceptions import register_exception_handlers
@@ -126,6 +126,7 @@ def create_app() -> FastAPI:
     app.include_router(preferences.router, prefix="/api")
     app.include_router(suggestions.router, prefix="/api")
     app.include_router(helpdesk.router, prefix="/api")
+    app.include_router(admin_faq.router, prefix="/api")
 
     # Metrics at root /metrics (Prometheus convention).
     app.include_router(metrics.router)

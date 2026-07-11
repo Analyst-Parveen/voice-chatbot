@@ -4,6 +4,8 @@ from app.db.repositories.base import BaseRepository
 from app.db.repositories.repositories import (
     AnalyticsRepository,
     AuditLogRepository,
+    FAQAnswerRepository,
+    FAQIntentRepository,
     FeedbackRepository,
     MessageRepository,
     RetrievalRepository,
@@ -15,6 +17,8 @@ __all__ = [
     "AnalyticsRepository",
     "AuditLogRepository",
     "BaseRepository",
+    "FAQAnswerRepository",
+    "FAQIntentRepository",
     "FeedbackRepository",
     "MessageRepository",
     "RetrievalRepository",

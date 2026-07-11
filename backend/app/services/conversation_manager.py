@@ -19,6 +19,9 @@ import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import Protocol
+
+from app.services.dto import FAQMatch
 
 from app.core.config import Settings
 from app.core.metrics import record_turn
@@ -38,6 +41,14 @@ from app.services.starter_faqs import lookup_starter_answer
 from app.services.validation_service import FALLBACK_MESSAGE, hindi_fallback_message, ValidationService
 
 SYSTEM_PROMPT = build_system_prompt()  # default; per-turn language overrides in _prepare
+
+
+class FAQMatcher(Protocol):
+    """The curated-FAQ layer: returns a match or None (falls through to RAG)."""
+
+    async def match(
+        self, message: str, language: str | None, db: object
+    ) -> FAQMatch | None: ...
 
 # Split a cached answer back into word-sized tokens (whitespace preserved) so a
 # cache hit streams and speaks exactly like a freshly generated answer.
@@ -67,6 +78,8 @@ class ConversationManager:
         telemetry: TelemetryService,
         settings: Settings,
         cache: AnswerCache | None = None,
+        faq: FAQMatcher | None = None,
+        db: object | None = None,
     ) -> None:
         self._memory = memory
         self._llm = llm
@@ -75,6 +88,8 @@ class ConversationManager:
         self._telemetry = telemetry
         self._settings = settings
         self._cache = cache
+        self._faq = faq
+        self._db = db
 
     # ---- Shared steps -------------------------------------------------
 
@@ -115,6 +130,22 @@ class ConversationManager:
             input_type=input_type, started=started,
             user_ref=user_ref, language=language, client_ip=client_ip,
         )
+
+    async def _direct_answer(self, message: str, language: str | None) -> str | None:
+        """A pre-answered reply that bypasses RAG + LLM, or None.
+
+        Checks the hardcoded starter questions first, then the curated FAQ layer
+        (query normalization → FAQ vector search → confidence gate). Any miss or
+        error returns None so the turn falls through to RAG + LLM unchanged.
+        """
+        canned = lookup_starter_answer(message, language)
+        if canned is not None:
+            return canned
+        if self._faq is not None and self._db is not None:
+            match = await self._faq.match(message, language, self._db)
+            if match is not None:
+                return match.answer
+        return None
 
     @staticmethod
     def _exclude_last_user(history: list[ChatMessage], current: str) -> list[ChatMessage]:
@@ -189,7 +220,7 @@ class ConversationManager:
         client_ip: str | None = None,
     ) -> TurnResult:
         """Run a full turn and return the result (non-streaming)."""
-        canned = lookup_starter_answer(message, language)
+        canned = await self._direct_answer(message, language)
         prepared = await self._prepare(
             session_id=session_id, message=message,
             input_type=input_type, user_ref=user_ref, language=language,
@@ -236,7 +267,7 @@ class ConversationManager:
         ``{"type": "token", "token"}`` (repeated) →
         ``{"type": "done", "message_id", "latency_ms", "sources"}``.
         """
-        canned = lookup_starter_answer(message, language)
+        canned = await self._direct_answer(message, language)
         prepared = await self._prepare(
             session_id=session_id, message=message,
             input_type=input_type, user_ref=user_ref, language=language,

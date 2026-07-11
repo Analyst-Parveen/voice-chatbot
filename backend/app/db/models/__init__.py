@@ -7,6 +7,7 @@ autogeneration and ``create_all`` see the full schema.
 from app.db.models.analytics import AnalyticsEvent
 from app.db.models.audit_log import AuditLog
 from app.db.models.enums import Channel, InputType, Rating, Role
+from app.db.models.faq import FAQAnswer, FAQIntent, FAQQuestion, FAQSource
 from app.db.models.feedback import Feedback
 from app.db.models.message import Message
 from app.db.models.retrieval import Retrieval
@@ -17,6 +18,10 @@ __all__ = [
     "AnalyticsEvent",
     "AuditLog",
     "Channel",
+    "FAQAnswer",
+    "FAQIntent",
+    "FAQQuestion",
+    "FAQSource",
     "Feedback",
     "InputType",
     "Message",

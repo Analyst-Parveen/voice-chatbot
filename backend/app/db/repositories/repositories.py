@@ -14,6 +14,8 @@ from app.db.base import utcnow
 from app.db.models import (
     AnalyticsEvent,
     AuditLog,
+    FAQAnswer,
+    FAQIntent,
     Feedback,
     Message,
     Retrieval,
@@ -126,3 +128,47 @@ class UserPreferenceRepository(BaseRepository[UserPreference]):
 
 class AuditLogRepository(BaseRepository[AuditLog]):
     model = AuditLog
+
+
+class FAQIntentRepository(BaseRepository[FAQIntent]):
+    model = FAQIntent
+
+    async def get_by_key(self, intent_key: str) -> FAQIntent | None:
+        result = await self.session.execute(
+            select(FAQIntent).where(FAQIntent.intent_key == intent_key)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_matchable(self, intent_key: str) -> FAQIntent | None:
+        """An intent is matchable only when enabled and approved."""
+        result = await self.session.execute(
+            select(FAQIntent).where(
+                FAQIntent.intent_key == intent_key,
+                FAQIntent.enabled.is_(True),
+                FAQIntent.status == "approved",
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_all(
+        self, *, status: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[FAQIntent]:
+        stmt = select(FAQIntent)
+        if status:
+            stmt = stmt.where(FAQIntent.status == status)
+        stmt = stmt.order_by(FAQIntent.updated_at.desc()).limit(limit).offset(offset)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+
+class FAQAnswerRepository(BaseRepository[FAQAnswer]):
+    model = FAQAnswer
+
+    async def get_for_intent(self, intent_id: str, language: str) -> FAQAnswer | None:
+        result = await self.session.execute(
+            select(FAQAnswer).where(
+                FAQAnswer.intent_id == intent_id,
+                FAQAnswer.language == language,
+            )
+        )
+        return result.scalar_one_or_none()

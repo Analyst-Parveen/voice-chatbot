@@ -489,22 +489,40 @@ function WidgetShell({ config }: { config: WidgetConfig }) {
                           </span>
                           New chat
                         </button>
-                        <button
-                          type="button"
-                          disabled={!chat.hasPreviousChat}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            chat.interrupt();
-                            void chat.loadPreviousChat();
-                            setInputDraft("");
-                          }}
-                          className="flex w-full items-center gap-2.5 rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-sky-700 dark:text-sky-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-                        >
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white">
-                            🕘
-                          </span>
-                          Previous chat
-                        </button>
+                        {chat.viewingPrevious ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              chat.interrupt();
+                              void chat.loadPreviousChat();
+                              setInputDraft("");
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-indigo-700 dark:text-indigo-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform"
+                          >
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-white">
+                              ↩
+                            </span>
+                            {isHindi ? HINDI_UI.currentChat : "Current chat"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!chat.hasPreviousChat}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              chat.interrupt();
+                              void chat.loadPreviousChat();
+                              setInputDraft("");
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/40 px-3.5 py-2.5 text-left text-xs font-semibold text-sky-700 dark:text-sky-300 shadow-lg hover:scale-[1.03] active:scale-[0.97] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                          >
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white">
+                              🕘
+                            </span>
+                            {isHindi ? HINDI_UI.previousChat : "Previous chat"}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

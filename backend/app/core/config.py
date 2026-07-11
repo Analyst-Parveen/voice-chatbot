@@ -84,11 +84,18 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="qwen2.5:0.5b", alias="LLM_MODEL")
     # Max seconds to wait for Ollama (slow CPUs may need several minutes per turn).
     ollama_timeout_seconds: float = Field(default=600.0, alias="OLLAMA_TIMEOUT_SECONDS")
+    # Max tokens the LLM may generate per answer. Ollama's built-in default
+    # (~128) cuts long answers off mid-sentence; raise this for full, detailed
+    # replies. Larger = longer answers allowed (a little slower on weak CPUs).
+    llm_max_tokens: int = Field(default=1024, alias="LLM_MAX_TOKENS")
 
     # ---- Qdrant (vector DB) ----
     qdrant_url: str = Field(default="", alias="QDRANT_URL")
     qdrant_path: str = Field(default="./qdrant_local", alias="QDRANT_PATH")
     qdrant_collection: str = Field(default="company_knowledge", alias="QDRANT_COLLECTION")
+    # Separate collection for curated FAQ/intent question vectors (matched
+    # directly to stored answers, bypassing the LLM).
+    faq_collection: str = Field(default="faq_intents", alias="FAQ_COLLECTION")
 
     # ---- Redis (optional cache + shared state) ----
     # Empty = disabled: rate limiting and helpdesk state stay in-process and no
@@ -110,6 +117,9 @@ class Settings(BaseSettings):
     rag_score_threshold: float = Field(default=0.35, alias="RAG_SCORE_THRESHOLD")
     rag_use_reranker: bool = Field(default=True, alias="RAG_USE_RERANKER")
     rag_min_context_chars: int = Field(default=40, alias="RAG_MIN_CONTEXT_CHARS")
+    # Min similarity for a curated-FAQ hit to answer directly (bypassing the
+    # LLM). Higher than the RAG threshold — an FAQ match must be near-exact.
+    faq_score_threshold: float = Field(default=0.72, alias="FAQ_SCORE_THRESHOLD")
 
     # ---- Security ----
     rate_limit_per_minute: int = Field(default=60, alias="RATE_LIMIT_PER_MINUTE")

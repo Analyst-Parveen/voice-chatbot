@@ -45,6 +45,10 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [prevSessionId, setPrevSessionId] = useState<string | null>(null);
+  // True while the user is viewing the swapped-in previous chat instead of the
+  // one they were last actively in. Drives the "Current chat" ⇄ "Previous chat"
+  // toggle in the UI. Reset whenever a fresh/cleared conversation starts.
+  const [viewingPrevious, setViewingPrevious] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const voiceWsRef = useRef<WebSocket | null>(null);
@@ -480,6 +484,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
       setIsStreaming(false);
       sessionRef.current = null;
       setSessionId(null);
+      setViewingPrevious(false);
       try {
         localStorage.removeItem(STORAGE_KEY);
         if (savePrev && departing) {
@@ -545,6 +550,9 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
           createdAt: m.created_at,
         })),
       );
+      // Each swap flips which of the two chats is on screen, so the toggle
+      // label switches between "Previous chat" and "Current chat".
+      setViewingPrevious((v) => !v);
       return true;
     } catch {
       onInfoRef.current?.("Previous chat is unavailable.");
@@ -567,5 +575,6 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     newChat,
     loadPreviousChat,
     hasPreviousChat: prevSessionId !== null,
+    viewingPrevious,
   };
 }

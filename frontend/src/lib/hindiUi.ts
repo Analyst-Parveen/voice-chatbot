@@ -14,4 +14,6 @@ export const HINDI_UI = {
   chooseLanguage: "अपनी भाषा चुनें",
   listeningHint: "सुन रही हूँ… कुछ सेकंड में टेक्स्ट दिखेगा",
   suggestedQuestions: "सुझाए गए सवाल",
+  previousChat: "पिछली चैट",
+  currentChat: "मौजूदा चैट",
 } as const;

@@ -23,6 +23,7 @@ class OllamaLLMService:
     def __init__(self, settings: Settings) -> None:
         self._url = settings.ollama_url.rstrip("/")
         self._model = settings.llm_model
+        self._max_tokens = settings.llm_max_tokens
         self._timeout = httpx.Timeout(
             connect=10.0,
             read=settings.ollama_timeout_seconds,
@@ -47,7 +48,9 @@ class OllamaLLMService:
             "model": self._model,
             "messages": self._messages(request),
             "stream": True,
-            "options": {"temperature": 0.2},
+            # num_predict lifts Ollama's ~128-token default so long answers
+            # aren't truncated mid-sentence (configurable via LLM_MAX_TOKENS).
+            "options": {"temperature": 0.2, "num_predict": self._max_tokens},
         }
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             async with client.stream("POST", f"{self._url}/api/chat", json=payload) as resp:

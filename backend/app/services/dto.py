@@ -55,3 +55,14 @@ class TurnResult:
     answer: str
     sources: list[RetrievedChunk]
     latency_ms: int
+
+
+@dataclass
+class FAQMatch:
+    """A curated FAQ intent matched against a user query."""
+
+    intent_key: str
+    confidence: float
+    answer: str
+    language: str
+    sources: list[str] = field(default_factory=list)

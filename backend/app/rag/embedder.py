@@ -110,9 +110,20 @@ def _use_lexical(settings: Settings) -> bool:
     return settings.is_stub or model in {"", "stub", "lexical"}
 
 
+_embedder: Embedder | None = None
+
+
 def get_embedder(settings: Settings) -> Embedder:
-    """Select the embedder implementation for the current configuration."""
-    if _use_lexical(settings):
-        logger.info("Using LexicalEmbedder (lightweight, no model download).")
-        return LexicalEmbedder()
-    return BgeEmbedder(settings.embed_model)
+    """Select the embedder for the current config (process-wide singleton).
+
+    Cached so the RAG and FAQ layers share ONE loaded model instead of loading
+    the (heavy) bge-m3 weights twice.
+    """
+    global _embedder
+    if _embedder is None:
+        if _use_lexical(settings):
+            logger.info("Using LexicalEmbedder (lightweight, no model download).")
+            _embedder = LexicalEmbedder()
+        else:
+            _embedder = BgeEmbedder(settings.embed_model)
+    return _embedder

@@ -76,6 +76,44 @@ def get_rag_service(settings: Settings) -> RAGService:
     return _rag_service
 
 
+_faq_service: object | None = None
+
+
+def get_faq_service(settings: Settings):
+    """Curated-FAQ matcher (process singleton).
+
+    Returns the no-op stub unless RAG is on AND the FAQ collection has actually
+    been built (via ``seed_faqs`` / ``generate_faqs``). This keeps chat turns
+    free of any extra embedding work until curated FAQs exist.
+    """
+    global _faq_service
+    if _faq_service is None:
+        if settings.rag_enabled:
+            from app.rag.embedder import get_embedder
+            from app.services.faq_service import (
+                QdrantFAQService,
+                StubFAQService,
+                build_faq_store,
+            )
+
+            store = build_faq_store(settings)
+            if store.exists():
+                _faq_service = QdrantFAQService(
+                    get_embedder(settings), store, settings.faq_score_threshold
+                )
+                logger.info(
+                    "FAQ layer enabled (collection=%s, threshold=%.2f).",
+                    store.collection, settings.faq_score_threshold,
+                )
+            else:
+                _faq_service = StubFAQService()
+        else:
+            from app.services.faq_service import StubFAQService
+
+            _faq_service = StubFAQService()
+    return _faq_service
+
+
 def get_stt_service(settings: Settings) -> STTService:
     global _stt_service
     if _stt_service is None:
@@ -117,4 +155,6 @@ def build_conversation_manager(db_session, settings: Settings) -> ConversationMa
         telemetry=TelemetryService(db_session),
         settings=settings,
         cache=AnswerCache(settings),
+        faq=get_faq_service(settings),
+        db=db_session,
     )
