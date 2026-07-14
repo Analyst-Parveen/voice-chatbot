@@ -4,7 +4,8 @@ backend/.env
 **/.env.azure
 **/.env.local
 **/.env.production
-**/.env.example
+# NOTE: .env.example files are intentionally COMMITTED (placeholders only, no
+# secrets) so anyone can see which variables to set.
 
 # ---- Python ----
 __pycache__/
@@ -69,4 +70,3 @@ Thumbs.db
 /.env.local
 /.env.azure
 /.env.stub
-/.env.example
