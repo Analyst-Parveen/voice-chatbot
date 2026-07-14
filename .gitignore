@@ -37,7 +37,14 @@ yarn-error.log*
 
 # ---- AI models & data ----
 /models/
-/data/
+# Ignore data/ EXCEPT the extracted markdown, which IS committed so the gathered
+# company knowledge (text) travels with the repo and never needs re-fetching.
+# The embeddings (qdrant_local) and the ingest manifest stay local — a fresh
+# clone rebuilds them from this text via backend-setup.ps1 (its ingestion step).
+/data/*
+!/data/extracted/
+/data/extracted/*
+!/data/extracted/*.md
 *.gguf
 *.onnx
 *.bin

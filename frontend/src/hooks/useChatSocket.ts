@@ -15,6 +15,14 @@ import type {
 const STORAGE_KEY = "voiceai_session_id";
 const PREV_KEY = "voiceai_prev_session_id";
 
+// A tiny silent WAV. Playing it on a reusable <audio> element DURING a real user
+// gesture (typing+send, mic tap) "unlocks" that element, so the browser then
+// allows playing the streamed TTS audio that arrives later inside a WebSocket
+// callback. Without this, browser autoplay policy blocks playback and answers
+// show as text but never speak.
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
 interface Options {
   /** Called with non-fatal server notes (e.g. "No speech detected"). */
   onInfo?: (message: string) => void;
@@ -76,6 +84,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
   const sayQueueRef = useRef<SayItem[]>([]);
   const speakingRef = useRef(false);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const audioUnlockedRef = useRef(false);
   const pendingDoneRef = useRef<ServerEvent | null>(null);
   // Voice path streams answer text via token events; say only carries audio.
   const voiceTextStreamedRef = useRef(false);
@@ -128,6 +137,34 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     [],
   );
 
+  // A single reusable <audio> element. Reusing one element (rather than a fresh
+  // `new Audio()` per clip) lets the gesture-time unlock below carry over to the
+  // real TTS clips that arrive later over the WebSocket.
+  const getPlayer = useCallback((): HTMLAudioElement | null => {
+    if (!audioElRef.current && typeof Audio !== "undefined") {
+      audioElRef.current = new Audio();
+    }
+    return audioElRef.current;
+  }, []);
+
+  // Unlock audio from within a user gesture (call from send / mic handlers).
+  const primeAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    const el = getPlayer();
+    if (!el) return;
+    el.src = SILENT_WAV;
+    const p = el.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => {
+        el.pause();
+        el.currentTime = 0;
+        audioUnlockedRef.current = true;
+      }).catch(() => {
+        /* still locked — a later gesture will try again */
+      });
+    }
+  }, [getPlayer]);
+
   // Play the next queued sentence: reveal its text, then speak it; advance on end.
   const playNextSay = useCallback(() => {
     if (speakingRef.current) return;
@@ -144,24 +181,32 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     }
 
     if (item.audio && !mutedRef.current) {
-      const audio = new Audio(`data:${item.mime};base64,${item.audio}`);
-      audioElRef.current = audio;
+      const el = getPlayer();
+      if (!el) {
+        playNextSay();
+        return;
+      }
       speakingRef.current = true;
       setIsSpeaking(true);
       const advance = () => {
         speakingRef.current = false;
         setIsSpeaking(false);
-        audioElRef.current = null;
         playNextSay();
       };
-      audio.onended = advance;
-      audio.onerror = advance;
-      audio.play().catch(advance);
+      el.onended = advance;
+      el.onerror = advance;
+      el.src = `data:${item.mime};base64,${item.audio}`;
+      el.play().catch(() => {
+        // Playback blocked (e.g. autoplay) — tell the user once instead of
+        // failing silently, then keep revealing text.
+        onInfoRef.current?.("Tap anywhere on the page to enable voice.");
+        advance();
+      });
     } else {
       // Muted or no audio: reveal remaining text without waiting.
       playNextSay();
     }
-  }, [appendToStreaming, finalizeDone]);
+  }, [appendToStreaming, finalizeDone, getPlayer]);
 
   const stopSpeaking = useCallback(() => {
     // Reveal any not-yet-shown text so the message stays complete.
@@ -171,7 +216,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
     sayQueueRef.current = [];
     if (audioElRef.current) {
       audioElRef.current.pause();
-      audioElRef.current = null;
+      // Keep the element (it stays unlocked for the next spoken answer).
     }
     speakingRef.current = false;
     setIsSpeaking(false);
@@ -338,6 +383,10 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
 
+      // Runs inside the user's click/Enter gesture — unlock audio now so the
+      // spoken answer that arrives later is allowed to play.
+      if (speak) primeAudio();
+
       startAssistantTurn(trimmed, inputType);
       const payload = JSON.stringify({
         type: "message",
@@ -389,7 +438,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         setTimeout(() => clearInterval(trySend), 5000);
       }
     },
-    [connect, connectVoice, isStreaming, patch, startAssistantTurn],
+    [connect, connectVoice, isStreaming, patch, primeAudio, startAssistantTurn],
   );
 
   const transcribeAudio = useCallback(
@@ -442,6 +491,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
   const sendAudio = useCallback(
     async (blob: Blob, language?: string) => {
       if (isStreaming) return;
+      primeAudio(); // mic tap is a user gesture — unlock audio for the reply
       try {
         const ws = await connectVoice();
         ws.send(
@@ -458,7 +508,7 @@ export function useChatSocket(config: WidgetConfig, options: Options = {}) {
         onInfoRef.current?.("Voice service unavailable.");
       }
     },
-    [connectVoice, isStreaming],
+    [connectVoice, isStreaming, primeAudio],
   );
 
   const interrupt = useCallback(() => {

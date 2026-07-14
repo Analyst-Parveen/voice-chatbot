@@ -125,3 +125,12 @@ voice-ai-assistant/
 ## License / cost
 
 All dependencies are free and open source. You pay only for the server that hosts it.
+
+
+
+<!-- cd D:\voice-ai-assistant
+powershell -ExecutionPolicy Bypass -File backend\deploy\azure\backend-setup.ps1 -->
+
+<!-- npm install 
+.\venv\Scripts\Activate.ps1 
+uvicorn app.main:app --host 0.0.0.0 --port 8000 -->
